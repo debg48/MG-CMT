@@ -1,0 +1,21 @@
+# Vanilla Cross-Modal Transformer Configuration
+# Inherits base hyperparameters for fair comparison
+
+exp_name: vanilla_cmt
+model_type: vanilla_cmt
+modality: both
+
+# Base hyperparameters (SAME FOR ALL MODELS)
+data_root: data/JU-LDD-task-b
+save_dir: checkpoints
+img_size: 224
+patch_size: 16
+num_layers: 4
+embed_dim: 256
+num_heads: 8
+dropout: 0.1
+batch_size: 4
+num_epochs: 50
+learning_rate: 0.0001
+weight_decay: 0.01
+num_workers: 2

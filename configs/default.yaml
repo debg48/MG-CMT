@@ -1,0 +1,23 @@
+# MG-CMT Training Configuration
+
+# Experiment
+exp_name: mg_cmt_baseline
+data_root: data/JU-LDD-task-b
+save_dir: checkpoints
+
+# Model Architecture
+img_size: 224
+patch_size: 16
+num_layers: 4        # Transformer layers
+embed_dim: 256       # Hidden dimension
+num_heads: 8         # Attention heads
+fmca_modulation: logit  # 'logit' or 'post'
+
+# Training
+batch_size: 4        # Adjust based on M4 Air memory
+num_epochs: 50
+learning_rate: 0.0001
+weight_decay: 0.01
+
+# Data Loading
+num_workers: 2       # Parallel data loading workers

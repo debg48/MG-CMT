@@ -92,35 +92,46 @@ pip install -r requirements.txt
 
 ## 🚀 Usage
 
-### Quick Test (Verify Installation)
+### Quick Start
 
 ```bash
-# Test individual components
-python3 -m models.encoders   # Test custom ViT encoder
-python3 -m models.fis         # Test Mamdani FIS
-python3 -m models.fusion      # Test FMCA
-python3 -m models.mg_cmt      # Test complete model
+# 1. Set up environment (first time only)
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Train MG-CMT
+python3 train.py --config configs/mg_cmt.yaml
 ```
 
-Expected output:
-
-```
-Using device: mps
-Total parameters: 10,521,218
-✅ Model successfully initialized and tested on mps!
-```
-
-### Training (Coming Soon)
+### Train Individual Models
 
 ```bash
-python3 train.py --config configs/default.yaml
+# Your model
+python3 train.py --config configs/mg_cmt.yaml
+
+# Baselines
+python3 train.py --config configs/cxr_only.yaml
+python3 train.py --config configs/sputum_only.yaml
+python3 train.py --config configs/concat_fusion.yaml
+python3 train.py --config configs/vanilla_cmt.yaml
+python3 train.py --config configs/scalar_gate_mlp.yaml
 ```
 
-### Inference (Coming Soon)
+### Override Settings
 
 ```bash
-python3 inference.py --cxr_path data/sample_cxr.png --sputum_path data/sample_sputum.png
+python3 train.py --config configs/mg_cmt.yaml --epochs 100 --batch_size 8
 ```
+
+### Monitor Training
+
+```bash
+tensorboard --logdir checkpoints
+# Open http://localhost:6006
+```
+
+**Output:** Each training run creates `checkpoints/{model}_{timestamp}/` with plots (accuracy, loss, confusion matrix), checkpoints, and test results.
 
 ## 📂 Project Structure
 
@@ -168,6 +179,69 @@ If you use this code in your research, please cite:
 ## 📧 Contact
 
 For questions or collaborations, please reach out to [your.email@university.edu]
+
+## 🎯 Experimental Setup
+
+### Fair Benchmarking
+
+All models use **IDENTICAL** hyperparameters to ensure fair comparison:
+
+- **Architecture**: 4 layers, 256-dim embeddings, 8 attention heads
+- **Training**: 50 epochs, batch size 4, learning rate 1e-4
+- **Optimizer**: AdamW with weight decay 0.01
+- **Scheduler**: CosineAnnealingLR
+- **Data Augmentation**: Identical for CXR and Sputum across all models
+
+Only model-specific parameters differ (e.g., `model_type`, `modality`, `gate_type`).
+
+### Training Output
+
+Each experiment creates a timestamped directory with:
+
+```
+checkpoints/{model}_{timestamp}/
+├── plots/
+│   ├── loss_curve.png              # Training/validation loss
+│   ├── accuracy_curve.png          # Training/validation accuracy
+│   ├── f1_curve.png                # Training/validation F1-score
+│   ├── all_metrics.png             # Combined metrics plot
+│   └── confusion_matrix_test.png   # Test set confusion matrix
+├── checkpoint_best.pth             # Best model (highest val F1)
+├── checkpoint_latest.pth           # Latest epoch
+├── config.yaml                     # Training configuration
+├── test_results.yaml               # Final test metrics
+└── logs/                           # TensorBoard logs
+```
+
+### Run Multiple Experiments
+
+Use the experiment runner for batch execution:
+
+```bash
+# List all available experiments
+python3 run_experiments.py --list
+
+# Run Tier 1 (7 baselines + MG-CMT)
+python3 run_experiments.py --suite tier1 --epochs 50
+
+# Run ablation studies
+python3 run_experiments.py --suite ablation_fis
+python3 run_experiments.py --suite ablation_fmca
+
+# Run specific experiment
+python3 run_experiments.py --experiment mg_cmt
+
+# Dry run (test without training)
+python3 run_experiments.py --suite tier1 --dry_run
+```
+
+### Training Time Estimates (M4 Air)
+
+- **Per experiment**: ~4-5 hours (50 epochs)
+- **Tier 1 (7 experiments)**: ~28-35 hours
+- **All experiments**: ~40-50 hours
+
+💡 Recommended: Run overnight or over the weekend!
 
 ## 🎯 Next Steps
 

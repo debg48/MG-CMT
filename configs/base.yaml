@@ -1,0 +1,27 @@
+# Shared Base Configuration for Fair Comparison
+# All models use IDENTICAL hyperparameters except model-specific settings
+
+# Dataset
+data_root: data/JU-LDD-task-b
+save_dir: checkpoints
+
+# Architecture (SAME FOR ALL MODELS)
+img_size: 224
+patch_size: 16
+num_layers: 4          # 4 transformer layers
+embed_dim: 256         # 256-dimensional embeddings
+num_heads: 8           # 8 attention heads
+dropout: 0.1           # 10% dropout
+
+# Training (SAME FOR ALL MODELS)
+batch_size: 4          # Optimized for M4 Air
+num_epochs: 50         # Standard for medical imaging
+learning_rate: 0.0001  # 1e-4
+weight_decay: 0.01     # L2 regularization
+
+# Data Loading
+num_workers: 2         # Parallel workers
+
+# Optimizer: AdamW (same for all)
+# Scheduler: CosineAnnealingLR (same for all)
+# Loss: CrossEntropyLoss (same for all)
