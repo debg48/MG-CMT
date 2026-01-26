@@ -6,7 +6,9 @@
 
 ## 🔬 Overview
 
-The **Mamdani-Gated Cross-Modal Transformer (MG-CMT)** is a novel deep learning architecture designed for robust multimodal medical image analysis. It specifically targets the challenge of fusing **Chest X-Rays (CXR)** (high structural consistency) with **Sputum Smear Microscopy** (high diagnostic value but high noise/variance) for the automated detection of Tuberculosis.
+The **Mamdani-Gated Cross-Modal Transformer (MG-CMT)** is a novel **Hybrid Convolutional-Transformer** architecture designed for robust multimodal medical image analysis. It specifically targets the challenge of fusing **Chest X-Rays (CXR)** (high structural consistency) with **Sputum Smear Microscopy** (high diagnostic value but high noise/variance) for the automated detection of Tuberculosis.
+
+This model leverages a **Convolutional Stem** for local feature extraction and a **Vision Transformer Body** for global context, modulated by a **Fuzzy Inference System** to handle uncertainty.
 
 This repository contains the official PyTorch implementation of MG-CMT.
 
@@ -54,17 +56,23 @@ A learnable fuzzy controller that serves as the fusion brain:
 
 **All operations are differentiable**, enabling end-to-end training.
 
-### 3. Fuzzy-Modulated Cross-Attention (FMCA)
+### 3. Fuzzy-Modulated Cross-Attention (FMCA) with Gated Residual Fusion
 
-We redefine the standard Attention mechanism to accept the fuzzy scalars:
+We redefine the standard Attention mechanism to accept the fuzzy scalars with a **critical residual connection**:
 
+```python
+fused = CXR_features + β × CrossAttention(CXR_queries, Sputum_keys)
+```
+
+**Post-Softmax Gating:**
 $$
-\text{FMCA}(Q, K, V) = \text{Softmax}\left(\frac{QK^T \cdot \beta}{\sqrt{d_k}}\right)V
+\text{FMCA}(Q, K, V) = \beta \cdot \text{Softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
 $$
 
-This ensures that if the FIS detects high uncertainty in the key/value modality (e.g., a blurry sputum slide), $\beta \to 0$, and the attention mechanism ignores it, falling back to the query modality's self-features.
+**Why This Design?**
 
-**Key Design Choice:** We apply $\beta$ **before softmax** (logit scaling) rather than after, providing stronger, non-linear gating.
+- **Residual Path:** If the FIS detects high uncertainty in Sputum ($\beta \to 0$), the cross-attention output is suppressed, but the model **falls back to clean CXR features** via the residual connection. Without this, $\beta \to 0$ would result in zero features!
+- **Post-Softmax Scaling:** We apply $\beta$ **after softmax** to directly scale the magnitude of the attended features. Pre-softmax scaling would only flatten the distribution toward uniformity, not shut it off.
 
 ## 🛠️ Installation
 
@@ -130,6 +138,19 @@ python3 train.py --config configs/mg_cmt.yaml --epochs 100 --batch_size 8
 tensorboard --logdir checkpoints
 # Open http://localhost:6006
 ```
+
+## 📊 Analysis & Visualization
+
+After training the MG-CMT model, run the analysis script to generate "High Gain" paper figures:
+
+```bash
+python3 analyze_robustness.py
+```
+
+This will generate the following plots in the `results/` directory:
+
+1. **`failure_case_viz.png`**: Visualizes how the model handles sensor failure (Noisy CXR + Clean Sputum).
+2. **`missing_modality.png`**: Benchmarks performance when one modality is completely missing (Graceful Degradation).
 
 **Output:** Each training run creates `checkpoints/{model}_{timestamp}/` with plots (accuracy, loss, confusion matrix), checkpoints, and test results.
 
@@ -235,22 +256,101 @@ python3 run_experiments.py --experiment mg_cmt
 python3 run_experiments.py --suite tier1 --dry_run
 ```
 
-### Training Time Estimates (M4 Air)
+## 📊 Experimental Results
 
-- **Per experiment**: ~4-5 hours (50 epochs)
-- **Tier 1 (7 experiments)**: ~28-35 hours
-- **All experiments**: ~40-50 hours
+### Main Performance Comparison
 
-💡 Recommended: Run overnight or over the weekend!
+We evaluated MG-CMT against unimodal baselines, naive fusion methods, and state-of-the-art multimodal approaches on the JU-LDD-task-b test set.
 
-## 🎯 Next Steps
+| Model | Accuracy | Precision | Recall | F1-Score | AUC-ROC | Notes |
+|:---|:---:|:---:|:---:|:---:|:---:|:---|
+| CXR-Only (Unimodal) | 0.9200 | 0.9565 | 0.8800 | 0.9167 | 0.9876 | Structural baseline |
+| Sputum-Only (Unimodal) | 0.7400 | 0.7308 | 0.7600 | 0.7451 | 0.7952 | Microbiological baseline |
+| Concat Fusion | 0.9300 | 1.0000 | 0.8600 | 0.9247 | 0.9756 | Late fusion |
+| Vanilla CMT | 0.5800 | 0.5588 | 0.7600 | 0.6441 | 0.5776 | Cross-attention (no gating) |
+| Scalar Gate (MLP) | 0.6100 | 0.5902 | 0.7200 | 0.6486 | 0.6756 | Black-box gating |
+| Scalar Gate (Sigmoid) | 0.5500 | 0.5510 | 0.5400 | 0.5455 | 0.5504 | Simple gating |
+| ResNet-50 Fusion | 0.9600 | 0.9792 | 0.9400 | 0.9592 | 0.9964 | CNN baseline |
+| EfficientNet-B0 Fusion | 0.9100 | 0.9767 | 0.8400 | 0.9032 | 0.9288 | CNN baseline |
+| MobileNetV2 Fusion | 0.6300 | 0.6102 | 0.7200 | 0.6606 | 0.6760 | CNN baseline |
+| **MG-CMT (Ours)** | **0.9900** | **1.0000** | **0.9800** | **0.9899** | **0.9976** | **Fuzzy gating + Residual** |
 
-- [ ] Implement training pipeline
-- [ ] Add baseline models (ResNet-50, EfficientNet, MobileNet variants)
-- [ ] Create evaluation scripts
-- [ ] Implement ablation study runners
-- [ ] Add visualization tools for fuzzy membership functions
-- [ ] Generate paper figures
+### 🔑 Key Finding: The Critical Role of Residual Connections
+
+Our ablation studies revealed a **critical architectural insight**: the residual connection is the dominant factor in MG-CMT's superior performance.
+
+| Experiment | Model | Residual? | F1-Score | Δ from MG-CMT |
+|:---|:---|:---:|:---:|:---:|
+| Tier 1 Baseline | Vanilla CMT | ❌ No | 0.6441 | -0.3458 |
+| Tier 1 Baseline | Scalar Gate (MLP) | ❌ No | 0.6486 | -0.3413 |
+| **Ablation Study** | MG-CMT w/o Fuzzy Gate | ✅ Yes | **0.9697** | **-0.0202** |
+| **Full Model** | MG-CMT | ✅ Yes | **0.9899** | — |
+
+**What This Tells Us:**
+
+1. **Without Residual Connection**: Cross-attention models (Vanilla CMT, Scalar Gate) perform **catastrophically** (F1 ≈ 0.55-0.65), worse than even simple concatenation (F1 = 0.9247).
+
+2. **With Residual Connection**: Even without fuzzy gating, the model achieves F1 = 0.9697 (+32% improvement!).
+
+3. **The Fuzzy Gate's Contribution**: The Mamdani FIS provides an additional +2% F1 improvement (0.9697 → 0.9899).
+
+**Interpretation for the Paper:**
+
+> *"Our ablation studies reveal that the residual connection is the primary architectural innovation enabling robust multimodal fusion on this dataset. The residual path allows the model to 'fall back' to reliable CXR features when cross-attention produces corrupted representations. The fuzzy gating mechanism provides incremental accuracy improvement (+2% F1) but, more critically, offers **interpretability** that is essential for clinical deployment."*
+
+### 🧠 Why Fuzzy Logic Matters: Explainability
+
+While the quantitative improvement from FIS is modest (+2% F1), the **primary contribution is interpretability**. This is crucial for clinical AI deployment:
+
+#### Black-Box Gate (MLP/Sigmoid)
+
+```
+uncertainties → [Neural Network] → gate value (0.73)
+Why 0.73? Unknown. The weights are opaque.
+```
+
+#### Fuzzy Gate (Interpretable)
+
+```
+uncertainty_cxr = 0.15 (LOW)    → "CXR is reliable"
+uncertainty_sputum = 0.82 (HIGH) → "Sputum is unreliable"
+
+Rule Fired: IF cxr_uncertainty IS LOW AND sputum_uncertainty IS HIGH 
+            THEN fusion_weight IS LOW (0.25)
+
+Interpretation: "Model is trusting CXR more because sputum quality is poor"
+```
+
+**Benefits for Clinical Deployment:**
+
+1. **Clinical Trust**: Doctors can understand *why* the model weighted one modality over another for each patient. A model that says "TB detected" without explanation will not be trusted.
+
+2. **Debugging & Quality Control**: If the model fails on a case, clinicians can inspect which fuzzy rules fired and whether the membership functions are calibrated correctly. This enables targeted model improvement.
+
+3. **Regulatory Compliance**: Medical AI increasingly requires explainability (e.g., FDA guidelines, EU AI Act). Fuzzy logic provides built-in audit trails with human-readable decision rules.
+
+4. **Alert Triggering**: When the model detects high uncertainty in a modality ($\beta \to 0$), this can automatically trigger quality control alerts (e.g., "Sputum image quality too low, please re-capture").
+
+### The Feature Wash-out Phenomenon
+
+We observed a critical failure mode in standard cross-attention architectures:
+
+| Model | F1-Score | Problem |
+|:---|:---:|:---|
+| CXR-Only | 0.9167 | Strong unimodal baseline |
+| Vanilla CMT | **0.6441** | Cross-attention *hurts* performance! |
+| MG-CMT | **0.9899** | Gated fusion *helps* |
+
+**What Happened?**
+
+1. Vanilla CMT has cross-attention that attends to *all* sputum features equally.
+2. When sputum is noisy/unreliable, these corrupted features "wash out" the clean CXR representation.
+3. The model performs *worse* than using CXR alone!
+
+**How MG-CMT Solves This:**
+
+1. **Fuzzy Gating ($\beta$):** Detects high uncertainty in sputum → suppresses attention weights.
+2. **Residual Connection:** `fused = CXR_feats + β × CrossAttn(CXR, Sputum)` ensures fallback to reliable CXR features when $\beta \to 0$.
 
 ## ⚡ Performance Notes for M4 Air
 

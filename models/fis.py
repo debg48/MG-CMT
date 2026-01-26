@@ -43,9 +43,29 @@ class MamdaniFIS(nn.Module):
         
         # Learnable rule consequents (output fuzzy sets)
         # For each rule, define the output membership function
-        num_rules = num_membership_funcs ** num_inputs  # 3x3 = 9 rules
-        self.rule_outputs_alpha = nn.Parameter(torch.rand(num_rules))  # [9]
-        self.rule_outputs_beta = nn.Parameter(torch.rand(num_rules))   # [9]
+        # Learnable rule consequents (output fuzzy sets)
+        # Initialize with logic priors:
+        # Rule index maps to: (CXR_MF, SPT_MF)
+        # 0=(L,L), 1=(L,M), 2=(L,H), 3=(M,L), 4=(M,M), 5=(M,H), 6=(H,L), 7=(H,M), 8=(H,H)
+        
+        # Alpha (Trust in CXR): High when CXR is Low Uncertainty (indices 0,1,2)
+        # Beta (Trust in Sputum): High when Sputum is Low Uncertainty (indices 0,3,6)
+        
+        # Logic: If Uncertainty is Low -> Trust, If High -> Distrust
+        init_alpha = torch.tensor([
+            0.9, 0.9, 0.9,  # CXR Low Unc -> High Trust
+            0.5, 0.5, 0.5,  # CXR Med Unc -> Med Trust
+            0.1, 0.1, 0.1   # CXR High Unc -> Low Trust
+        ])
+        
+        init_beta = torch.tensor([
+            0.9, 0.5, 0.1,
+            0.9, 0.5, 0.1,
+            0.9, 0.5, 0.1
+        ])
+        
+        self.rule_outputs_alpha = nn.Parameter(init_alpha)
+        self.rule_outputs_beta = nn.Parameter(init_beta)
         
     def gaussian_membership(self, x, mu, sigma):
         """

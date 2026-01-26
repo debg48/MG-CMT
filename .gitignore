@@ -1,5 +1,7 @@
 *.pdf
 *.txt
 *.log
-data
+data/JU-LDD-task-b
 env
+checkpoints
+results

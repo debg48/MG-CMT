@@ -28,17 +28,20 @@ EXPERIMENTS = {
         },
         'vanilla_cmt': {
             'model_type': 'vanilla_cmt',
-            'description': 'Cross-attention without gating'
+            'description': 'Cross-attention without gating',
+            'use_residual': False
         },
         'scalar_gate_mlp': {
             'model_type': 'scalar_gate',
             'gate_type': 'mlp',
-            'description': 'Learnable MLP gate'
+            'description': 'Learnable MLP gate',
+            'use_residual': False
         },
         'scalar_gate_sigmoid': {
             'model_type': 'scalar_gate',
             'gate_type': 'sigmoid',
-            'description': 'Learnable sigmoid gate'
+            'description': 'Learnable sigmoid gate',
+            'use_residual': False
         },
         'mg_cmt': {
             'model_type': 'mg_cmt',
@@ -47,6 +50,44 @@ EXPERIMENTS = {
         }
     },
     
+    # Tier 2: CNN Backbone Comparisons (Standard Baselines)
+    'tier2': {
+        # Multimodal Fusion Baselines (Concat)
+        'resnet_fusion': {
+            'model_type': 'cnn_fusion',
+            'backbone': 'resnet50',
+            'description': 'ResNet-50 Concat Fusion'
+        },
+        'efficientnet_fusion': {
+            'model_type': 'cnn_fusion',
+            'backbone': 'efficientnet_b0',
+            'description': 'EfficientNet-B0 Concat Fusion'
+        },
+        'mobilenet_fusion': {
+            'model_type': 'cnn_fusion',
+            'backbone': 'mobilenet_v2',
+            'description': 'MobileNetV2 Concat Fusion'
+        }
+    },
+    
+    # -------------------------------------------------------
+    # Tier 4: Robustness (Noise Analysis)
+    # -------------------------------------------------------
+    'robustness': {
+        # Concat Fusion Baselines
+        'concat_noise_1': {'model_type': 'concat', 'modality': 'both', 'kwargs': {'cxr_noise': 0.1}, 'desc': 'Concat Fusion (Noise 0.1)'},
+        'concat_noise_2': {'model_type': 'concat', 'modality': 'both', 'kwargs': {'cxr_noise': 0.2}, 'desc': 'Concat Fusion (Noise 0.2)'},
+        'concat_noise_3': {'model_type': 'concat', 'modality': 'both', 'kwargs': {'cxr_noise': 0.3}, 'desc': 'Concat Fusion (Noise 0.3)'},
+        
+        # MG-CMT (Ours)
+        'mg_cmt_noise_1': {'model_type': 'mg_cmt', 'modality': 'both', 'kwargs': {'cxr_noise': 0.1}, 'desc': 'MG-CMT (Noise 0.1)'},
+        'mg_cmt_noise_2': {'model_type': 'mg_cmt', 'modality': 'both', 'kwargs': {'cxr_noise': 0.2}, 'desc': 'MG-CMT (Noise 0.2)'},
+        'mg_cmt_noise_3': {'model_type': 'mg_cmt', 'modality': 'both', 'kwargs': {'cxr_noise': 0.3}, 'desc': 'MG-CMT (Noise 0.3)'},
+    },
+
+    # -------------------------------------------------------
+    # Ablation Studies
+    # -------------------------------------------------------
     # Ablation A: FIS variants
     'ablation_fis': {
         'mg_cmt_mamdani': {
@@ -56,33 +97,40 @@ EXPERIMENTS = {
         },
         'mg_cmt_no_gate': {
             'model_type': 'vanilla_cmt',
-            'description': 'No gating (alpha=1)'
+            'description': 'No gating (alpha=1)',
+            'use_residual': True
         },
         'mg_cmt_mlp_gate': {
             'model_type': 'scalar_gate',
             'gate_type': 'mlp',
-            'description': 'MLP gate instead of FIS'
+            'description': 'MLP gate instead of FIS',
+            'use_residual': True
         },
         'mg_cmt_sigmoid_gate': {
             'model_type': 'scalar_gate',
             'gate_type': 'sigmoid',
-            'description': 'Sigmoid gate instead of FIS'
+            'description': 'Sigmoid gate instead of FIS',
+            'use_residual': True
         }
     },
     
-    # Ablation B: FMCA mechanism
+    # Ablation B: FMCA mechanism (comparing modulation strategies)
+    # All experiments here use residual connections for fair comparison:
+    # - fmca_standard: uses vanilla_cmt + use_residual=True (explicit flag)
+    # - fmca_logit_scale/post_scale: use mg_cmt (residual is hardcoded in MGCMT class)
     'ablation_fmca': {
         'fmca_standard': {
             'model_type': 'vanilla_cmt',
-            'description': 'Standard cross-attention'
+            'description': 'Standard cross-attention',
+            'use_residual': True  # Matches mg_cmt residual for fair comparison
         },
         'fmca_logit_scale': {
-            'model_type': 'mg_cmt',
+            'model_type': 'mg_cmt',  # mg_cmt has residual built-in
             'fmca_modulation': 'logit',
             'description': 'FMCA with logit scaling (ours)'
         },
         'fmca_post_scale': {
-            'model_type': 'mg_cmt',
+            'model_type': 'mg_cmt',  # mg_cmt has residual built-in
             'fmca_modulation': 'post',
             'description': 'FMCA with post-softmax scaling'
         }
@@ -106,7 +154,7 @@ def run_single_experiment(exp_name, exp_config, base_config, dry_run=False):
     config['exp_name'] = exp_name
     
     print(f"\n{'='*70}")
-    print(f"🚀 Starting Experiment: {exp_name}")
+    print(f"Starting Experiment: {exp_name}")
     print(f"   Description: {exp_config.get('description', 'N/A')}")
     print(f"   Model Type: {exp_config.get('model_type', 'N/A')}")
     print(f"{'='*70}\n")
@@ -120,9 +168,9 @@ def run_single_experiment(exp_name, exp_config, base_config, dry_run=False):
     # Run training
     try:
         train(config)
-        print(f"\n✅ Experiment '{exp_name}' completed successfully!\n")
+        print(f"\n[OK] Experiment '{exp_name}' completed successfully!\n")
     except Exception as e:
-        print(f"\n❌ Experiment '{exp_name}' failed: {e}\n")
+        print(f"\n[ERROR] Experiment '{exp_name}' failed: {e}\n")
         raise
 
 
@@ -165,7 +213,7 @@ def main():
     
     # List experiments
     if args.list:
-        print("\n📋 Available Experiment Suites:")
+        print("\nAvailable Experiment Suites:")
         for suite_name, experiments in EXPERIMENTS.items():
             print(f"\n  {suite_name.upper()}:")
             for exp_name, exp_config in experiments.items():

@@ -1,7 +1,7 @@
 """
 MG-CMT Model Components
 """
-from .encoders import LightweightViT, RoPE2D
+from .encoders import LightweightViT, RoPE2D, CNNEncoder
 from .fis import MamdaniFIS
 from .fusion import FMCA
 from .mg_cmt import MGCMT

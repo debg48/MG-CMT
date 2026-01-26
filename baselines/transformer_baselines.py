@@ -123,9 +123,11 @@ class VanillaCMT(nn.Module):
         embed_dim=256,
         num_heads=8,
         num_classes=2,
-        dropout=0.1
+        dropout=0.1,
+        use_residual=False
     ):
         super().__init__()
+        self.use_residual = use_residual
         
         self.cxr_encoder = LightweightViT(
             img_size=img_size,
@@ -170,6 +172,10 @@ class VanillaCMT(nn.Module):
         )
         fused = fused.squeeze(1)
         
+        # Residual connection from CXR features (Critical for fair comparison with MG-CMT)
+        if self.use_residual:
+            fused = cxr_feats + fused
+        
         logits = self.classifier(fused)
         
         return {
@@ -193,9 +199,11 @@ class ScalarGateFusion(nn.Module):
         num_heads=8,
         num_classes=2,
         dropout=0.1,
-        gate_type='mlp'  # 'mlp' or 'sigmoid'
+        gate_type='mlp',  # 'mlp' or 'sigmoid'
+        use_residual=False
     ):
         super().__init__()
+        self.use_residual = use_residual
         
         self.cxr_encoder = LightweightViT(
             img_size=img_size,
@@ -259,6 +267,10 @@ class ScalarGateFusion(nn.Module):
             alpha=beta
         )
         fused = fused.squeeze(1)
+        
+        # Residual connection from CXR features (Critical for fair comparison with MG-CMT)
+        if self.use_residual:
+            fused = cxr_feats + fused
         
         logits = self.classifier(fused)
         

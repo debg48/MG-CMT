@@ -3,24 +3,25 @@
 
 # Dataset
 data_root: data/JU-LDD-task-b
+
 save_dir: checkpoints
 
 # Architecture (SAME FOR ALL MODELS)
 img_size: 224
 patch_size: 16
 num_layers: 4          # 4 transformer layers
-embed_dim: 256         # 256-dimensional embeddings
+embed_dim: 192         # Reduced capacity for regularization
 num_heads: 8           # 8 attention heads
-dropout: 0.1           # 10% dropout
+dropout: 0.3           # 30% dropout (regularization)
 
 # Training (SAME FOR ALL MODELS)
 batch_size: 4          # Optimized for M4 Air
-num_epochs: 50         # Standard for medical imaging
+num_epochs: 30         # Reduced to prevent overfitting
 learning_rate: 0.0001  # 1e-4
-weight_decay: 0.01     # L2 regularization
+weight_decay: 0.15     # Aggressive L2 regularization
 
 # Data Loading
-num_workers: 2         # Parallel workers
+num_workers: 0       # Set to 0 to debug DataLoader crash
 
 # Optimizer: AdamW (same for all)
 # Scheduler: CosineAnnealingLR (same for all)

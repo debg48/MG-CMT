@@ -20,6 +20,8 @@ from models.mg_cmt import MGCMT
 from baselines.transformer_baselines import (
     UnimodalModel, ConcatFusion, VanillaCMT, ScalarGateFusion
 )
+from models.encoders import CNNEncoder
+from baselines.cnn_baselines import StandardCNNFusion, StandardCNNUnimodal
 from data.dataset import get_dataloaders
 from utils.metrics import compute_metrics, print_metrics
 from utils.visualization import (
@@ -46,11 +48,15 @@ def create_model(config, device):
     elif model_type == 'concat':
         model = ConcatFusion(**common_args)
     elif model_type == 'vanilla_cmt':
-        model = VanillaCMT(**common_args)
+        model = VanillaCMT(
+            **common_args,
+            use_residual=config.get('use_residual', False)
+        )
     elif model_type == 'scalar_gate':
         model = ScalarGateFusion(
             **common_args,
-            gate_type=config.get('gate_type', 'mlp')
+            gate_type=config.get('gate_type', 'mlp'),
+            use_residual=config.get('use_residual', False)
         )
     elif model_type == 'mg_cmt':
         model = MGCMT(
@@ -62,6 +68,25 @@ def create_model(config, device):
             num_classes=2,
             fmca_modulation=config.get('fmca_modulation', 'logit')
         )
+    elif model_type == 'cnn':
+        # To maintain backward compatibility if user uses 'cnn', default to cnn_fusion
+        backbone_name = config.get('backbone', 'resnet50')
+        model = StandardCNNFusion(
+            backbone=backbone_name,
+            embed_dim=config['embed_dim'],
+            num_classes=2,
+            dropout=config.get('dropout', 0.1)
+        )
+    elif model_type == 'cnn_fusion':
+        # Standard CNN Fusion (Concat)
+        backbone_name = config.get('backbone', 'resnet50')
+        model = StandardCNNFusion(
+            backbone=backbone_name,
+            embed_dim=config['embed_dim'],
+            num_classes=2,
+            dropout=config.get('dropout', 0.1)
+        )
+
     else:
         raise ValueError(f"Unknown model type: {model_type}")
     
@@ -175,7 +200,7 @@ def save_checkpoint(model, optimizer, epoch, metrics, save_dir, is_best=False):
     if is_best:
         best_path = save_dir / 'checkpoint_best.pth'
         torch.save(checkpoint, best_path)
-        print(f"  💾 Saved best model (F1: {metrics['f1']:.4f})")
+        print(f"  [BEST] Saved best model (F1: {metrics['f1']:.4f})")
 
 
 def train(config):
@@ -199,7 +224,14 @@ def train(config):
     writer = SummaryWriter(log_dir=save_dir / 'logs')
     
     # Data loaders
-    print("Loading datasets...")
+    print("="*60)
+    print("LOADING DATASETS")
+    print("="*60)
+    print(f"Data root: {config['data_root']}")
+    print(f"Image size: {config['img_size']}")
+    print(f"Batch size: {config['batch_size']}")
+    print("")
+    
     train_loader, val_loader, test_loader = get_dataloaders(
         data_root=config['data_root'],
         batch_size=config['batch_size'],
@@ -207,15 +239,41 @@ def train(config):
         num_workers=config['num_workers']
     )
     
+    print(f"Dataset loading complete!")
+    print(f"   Train batches: {len(train_loader)}")
+    print(f"   Val batches:   {len(val_loader)}")
+    print(f"   Test batches:  {len(test_loader)}")
+    print("")
+    
     # Create model
-    print(f"\nInitializing model...")
+    print("="*60)
+    print("INITIALIZING MODEL")
+    print("="*60)
+    print(f"Model type: {config.get('model_type', 'mg_cmt')}")
+    print(f"Architecture: {config['num_layers']} layers, {config['embed_dim']}-dim, {config['num_heads']} heads")
+    print(f"Modality: {config.get('modality', 'both')}")
+    print("")
+    
     model = create_model(config, device)
     
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Model: {config.get('model_type', 'mg_cmt')}")
-    print(f"Total parameters: {num_params:,}\n")
+    print(f"Model initialized successfully!")
+    print(f"   Total parameters: {num_params:,}")
+    print(f"   Memory estimate: ~{num_params * 4 / 1e6:.1f} MB")
+    print("")
     
     # Loss and optimizer
+    print("="*60)
+    print("TRAINING SETUP")
+    print("="*60)
+    print(f"Loss function: CrossEntropyLoss")
+    print(f"Optimizer: AdamW")
+    print(f"  - Learning rate: {config['learning_rate']}")
+    print(f"  - Weight decay: {config['weight_decay']}")
+    print(f"Scheduler: CosineAnnealingLR")
+    print(f"  - T_max: {config['num_epochs']} epochs")
+    print("")
+    
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(
         model.parameters(),
@@ -238,7 +296,15 @@ def train(config):
     modality = config.get('modality', 'both')
     
     # Training loop
-    print("Starting training...\n")
+    print("="*60)
+    print("STARTING TRAINING")
+    print("="*60)
+    print(f"Total epochs: {config['num_epochs']}")
+    print(f"Device: {device}")
+    print(f"Experiment: {exp_name}")
+    print(f"Results will be saved to: {save_dir}")
+    print("")
+    
     best_f1 = 0.0
     
     for epoch in range(1, config['num_epochs'] + 1):
@@ -267,7 +333,7 @@ def train(config):
             history['val']['auc_roc'].append(val_metrics['auc_roc'])
         
         # Print metrics
-        print(f"\n📊 Epoch {epoch} Results:")
+        print(f"\nEpoch {epoch} Results:")
         print(f"  Train - Loss: {train_metrics['loss']:.4f}, "
               f"Acc: {train_metrics['accuracy']:.4f}, F1: {train_metrics['f1']:.4f}")
         print(f"  Val   - Loss: {val_metrics['loss']:.4f}, "
@@ -298,23 +364,33 @@ def train(config):
         
         # Plot training curves every 10 epochs
         if epoch % 10 == 0 or epoch == config['num_epochs']:
+            print(f"  Generating training curves...")
             plot_training_curves(history, plots_dir)
+            print(f"  [SAVED] Plots saved to {plots_dir}")
     
     # Final test evaluation
     print(f"\n{'='*60}")
-    print("Final Test Evaluation")
-    print(f"{'='*60}\n")
+    print("FINAL TEST EVALUATION")
+    print(f"{'='*60}")
+    print("Loading best model checkpoint...")
     
-    best_checkpoint = torch.load(save_dir / 'checkpoint_best.pth')
+    best_checkpoint = torch.load(save_dir / 'checkpoint_best.pth', weights_only=False)
     model.load_state_dict(best_checkpoint['model_state_dict'])
+    print(f"[LOADED] Model from epoch {best_checkpoint['epoch']}")
+    print(f"   Best validation F1: {best_checkpoint['metrics']['f1']:.4f}")
+    print("")
     
+    print("Running test evaluation...")
     test_metrics, test_labels, test_preds = validate(
         model, test_loader, criterion, device, 0, 'Test', modality
     )
     
-    print(f"\n🎯 Final Test Results:")
+    print(f"\n{'='*60}")
+    print("FINAL TEST RESULTS")
+    print(f"{'='*60}")
     print_metrics(test_metrics)
     
+    print(f"\nGenerating final plots...")
     # Plot final confusion matrix
     cm = np.array(test_metrics['confusion_matrix'])
     plot_confusion_matrix(
@@ -323,18 +399,27 @@ def train(config):
         save_path=plots_dir / 'confusion_matrix_test.png',
         title='Test Set Confusion Matrix'
     )
+    print(f"  [SAVED] Confusion matrix saved")
     
     # Plot final training curves
     plot_training_curves(history, plots_dir)
+    print(f"  [SAVED] Training curves saved")
     
     # Save results
     with open(save_dir / 'test_results.yaml', 'w') as f:
         yaml.dump(test_metrics, f)
+    print(f"  [SAVED] Test results saved")
     
     writer.close()
-    print(f"\n✅ Training complete!")
-    print(f"📁 Results saved to: {save_dir}")
-    print(f"📊 Plots saved to: {plots_dir}")
+    
+    print(f"\n{'='*60}")
+    print("TRAINING COMPLETE!")
+    print(f"{'='*60}")
+    print(f"Results directory: {save_dir}")
+    print(f"Plots directory: {plots_dir}")
+    print(f"Best validation F1: {best_f1:.4f}")
+    print(f"Final test F1: {test_metrics['f1']:.4f}")
+    print(f"{'='*60}\n")
 
 
 def main():

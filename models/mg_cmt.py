@@ -116,6 +116,13 @@ class MGCMT(nn.Module):
         
         fused_feats = fused_feats.squeeze(1)  # [B, 256]
         
+        # CRITICAL: Add residual connection from CXR
+        # This allows the model to fall back to CXR-only when sputum is unreliable
+        # fused = CXR_features + beta * cross_attention(CXR, Sputum)
+        # Note: beta is already applied inside FMCA if modulation='post'
+        # So we just add the residual here for fallback capability
+        fused_feats = cxr_feats + fused_feats  # Residual connection
+        
         # 4. Classification
         logits = self.classifier(fused_feats)  # [B, num_classes]
         
@@ -193,4 +200,4 @@ if __name__ == "__main__":
     print(f"  Uncertainty (CXR):   {outputs['uncertainty_cxr']}")
     print(f"  Uncertainty (Spt):   {outputs['uncertainty_sputum']}")
     
-    print(f"\n✅ Model successfully initialized and tested on {device}!")
+    print(f"\n[OK] Model successfully initialized and tested on {device}!")
