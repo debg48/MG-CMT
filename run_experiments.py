@@ -44,9 +44,9 @@ EXPERIMENTS = {
             'use_residual': False
         },
         'mg_cmt': {
-            'model_type': 'mg_cmt',
+            'model_type': 'mgm_tb_former',
             'fmca_modulation': 'logit',
-            'description': 'Full MG-CMT (ours)'
+            'description': 'Full MGM-TB-Former (ours)'
         }
     },
     
@@ -125,12 +125,12 @@ EXPERIMENTS = {
             'use_residual': True  # Matches mg_cmt residual for fair comparison
         },
         'fmca_logit_scale': {
-            'model_type': 'mg_cmt',  # mg_cmt has residual built-in
+            'model_type': 'mgm_tb_former',  # mg_cmt has residual built-in
             'fmca_modulation': 'logit',
             'description': 'FMCA with logit scaling (ours)'
         },
         'fmca_post_scale': {
-            'model_type': 'mg_cmt',  # mg_cmt has residual built-in
+            'model_type': 'mgm_tb_former',  # mgm_tb_former has residual built-in
             'fmca_modulation': 'post',
             'description': 'FMCA with post-softmax scaling'
         }

@@ -1,8 +1,8 @@
 # MG-CMT (Full Model) Configuration
 # Inherits base hyperparameters for fair comparison
 
-exp_name: mg_cmt
-model_type: mg_cmt
+exp_name: mgm_tb_former
+model_type: mgm_tb_former
 modality: both
 fmca_modulation: post
 

@@ -17,12 +17,12 @@ from torchvision import transforms
 from PIL import Image
 
 from data.dataset import TBMultimodalDataset, AddGaussianNoise
-from models.mg_cmt import MGCMT
+from models.mgm_tb_former import MGMTBFormer
 from baselines.transformer_baselines import ConcatFusion
 
 def load_model(checkpoint_path, config, device):
     """Load trained MG-CMT model."""
-    model = MGCMT(
+    model = MGMTBFormer(
         img_size=config['img_size'],
         patch_size=config['patch_size'],
         num_transformer_layers=config['num_layers'],
@@ -169,8 +169,14 @@ if __name__ == "__main__":
     # Check if checkpoint exists
     # Find actual MG-CMT checkpoints (not ablation variants like mg_cmt_no_gate, mg_cmt_sigmoid_gate)
     # Pattern: mg_cmt_YYYYMMDD_HHMMSS (exactly 8+6 digits after mg_cmt_)
-    checkpoint_glob = [p for p in Path("checkpoints").glob("mg_cmt_*/checkpoint_best.pth")
-                       if len(p.parent.name) == len("mg_cmt_20260125_145550")]  # Only exact timestamp format
+    # Pattern: mg_cmt_YYYYMMDD_HHMMSS or mgm_tb_former_YYYYMMDD_HHMMSS
+    # Find both legacy (mg_cmt_) and new (mgm_tb_former_) checkpoints
+    legacy_glob = [p for p in Path("checkpoints").glob("mg_cmt_*/checkpoint_best.pth")
+                       if len(p.parent.name) == len("mg_cmt_20260125_145550")]
+    new_glob = [p for p in Path("checkpoints").glob("mgm_tb_former_*/checkpoint_best.pth")
+                if len(p.parent.name) == len("mgm_tb_former_20260125_145550")]
+    
+    checkpoint_glob = legacy_glob + new_glob
     
     if not checkpoint_glob:
         print("Error: No MG-CMT checkpoint found! Run MG-CMT training first.")

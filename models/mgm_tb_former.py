@@ -10,14 +10,14 @@ from .fis import MamdaniFIS
 from .fusion import FMCA
 
 
-class MGCMT(nn.Module):
+class MGMTBFormer(nn.Module):
     """
-    Mamdani-Gated Cross-Modal Transformer for TB Detection.
+    MGM-TB-Former: Mamdani-Gated Multimodal Transformer for Robust TB Detection.
     
     Architecture:
     1. Custom lightweight ViT encoders (4 layers, 256-dim) with 2D-RoPE
-    2. Differentiable Mamdani FIS (uncertainty -> gating scalars)
-    3. Fuzzy-Modulated Cross-Attention (α-scaled fusion)
+    2. Differentiable Mamdani FIS for uncertainty-aware gating
+    3. Gated Residual Fusion (FMCA) for robustness (Fallback mechanism)
     4. Binary classification head
     
     Total Parameters: ~10.5M
@@ -151,11 +151,11 @@ def count_parameters(model):
 
 
 if __name__ == "__main__":
-    # Test full MG-CMT model
+    # Test full MGM-TB-Former model
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Using device: {device}\n")
     
-    model = MGCMT(
+    model = MGMTBFormer(
         img_size=224,
         patch_size=16,
         num_transformer_layers=4,

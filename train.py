@@ -16,7 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import numpy as np
 
-from models.mg_cmt import MGCMT
+from models.mgm_tb_former import MGMTBFormer
 from baselines.transformer_baselines import (
     UnimodalModel, ConcatFusion, VanillaCMT, ScalarGateFusion
 )
@@ -58,8 +58,8 @@ def create_model(config, device):
             gate_type=config.get('gate_type', 'mlp'),
             use_residual=config.get('use_residual', False)
         )
-    elif model_type == 'mg_cmt':
-        model = MGCMT(
+    elif model_type in ['mg_cmt', 'mgm_tb_former']:
+        model = MGMTBFormer(
             img_size=config['img_size'],
             patch_size=config['patch_size'],
             num_transformer_layers=config['num_layers'],
