@@ -1,0 +1,34 @@
+# MG-CMT Requirements
+# Optimized for Apple M4 Air
+
+# Core Deep Learning
+torch>=2.0.0  # MPS backend support
+torchvision>=0.15.0
+einops>=0.7.0  # For RoPE implementation
+
+# Data & Augmentation
+pillow>=10.0.0
+albumentations>=1.3.0
+opencv-python>=4.8.0
+
+# ML Utilities
+numpy>=1.24.0
+scikit-learn>=1.3.0
+scipy>=1.11.0
+
+# Metrics & Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+tensorboard>=2.14.0
+
+# Progress & Logging
+tqdm>=4.66.0
+wandb>=0.15.0  # Optional: for experiment tracking
+
+# Configuration
+pyyaml>=6.0.0
+
+# Development (Optional)
+pytest>=7.4.0
+black>=23.7.0
+flake8>=6.1.0
