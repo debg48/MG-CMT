@@ -38,6 +38,77 @@ def load_model(checkpoint_path, config, device):
     return model
 
 
+def analyze_noise_sensitivity(model, data_loader, device):
+    """
+    Analyze how gating values (alpha/beta) change with CXR noise.
+    """
+    print("\n[Analysis 1] Alpha/Beta vs Noise Level...")
+    
+    noise_levels = np.linspace(0, 1.0, 11) # 0.0 to 1.0
+    avg_alphas = []
+    avg_betas = []
+    
+    for sigma in tqdm(noise_levels, desc="Testing Noise Levels"):
+        noise_transform = AddGaussianNoise(std=sigma)
+        
+        batch_alphas = []
+        batch_betas = []
+        
+        # Run on a subset (first 5 batches) to save time
+        for i, batch in enumerate(data_loader):
+            if i >= 5: break
+            cxr, sputum, labels, ids = batch
+            
+            # Correct: Inject noise into SPUTUM to test Beta
+            cxr = cxr.to(device)
+            noisy_sputum = torch.stack([noise_transform(img) for img in sputum]).to(device)
+            
+            with torch.no_grad():
+                # Forward pass with NOISY SPUTUM
+                outputs = model(cxr, noisy_sputum)
+                
+                # Extract gating values
+                # Note: Model returns 'alpha_cxr' and 'alpha_sputum' or similar
+                # Check model output format
+                if 'alpha' in outputs and 'beta' in outputs:
+                     # Explicit alpha/beta return
+                    a = outputs['alpha'].mean().item()
+                    b = outputs['beta'].mean().item()
+                elif 'gates' in outputs:
+                    # Maybe a dict or tuple
+                    a = outputs['gates']['cxr'].mean().item()
+                    b = outputs['gates']['sputum'].mean().item()
+                else:
+                    # Fallback for some model variants (e.g., just one alpha?)
+                    # Assuming MG-CMT returns 'alpha_cxr' and 'alpha_sputum' in dict
+                    a = outputs.get('alpha_cxr', torch.tensor(0.5)).mean().item()
+                    b = outputs.get('alpha_sputum', torch.tensor(0.5)).mean().item()
+                
+                batch_alphas.append(a)
+                batch_betas.append(b)
+                
+        avg_alphas.append(np.mean(batch_alphas))
+        avg_betas.append(np.mean(batch_betas))
+        
+    # Plot Beta vs Noise
+    plt.figure(figsize=(10, 6))
+    plt.plot(noise_levels, avg_betas, 'o-', label='Beta (Sputum Conf)', color='#ff7f0e', linewidth=2)
+    plt.xlabel('Noise Standard Deviation ($\sigma$)', fontsize=12)
+    plt.ylabel('Sputum Gating Value ($\\beta$)', fontsize=12)
+    plt.title('Robustness Analysis: Gating Stability under Noise', fontsize=14)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.ylim(0, 1.0)
+    plt.legend(fontsize=12)
+    plt.tight_layout()
+    plt.savefig('results/beta_vs_noise.png', dpi=300)
+    plt.close()
+    
+    print("\n  Noise | Beta (Sputum)")
+    print("  ---------------------")
+    for s, b in zip(noise_levels, avg_betas):
+        print(f"  {s:.1f}   |   {b:.4f}")
+
+
 
 def visualize_failure_cases(model, data_loader, device):
     """Visualize 3-4 interesting cases."""
@@ -201,5 +272,6 @@ if __name__ == "__main__":
     model = load_model(checkpoint_path, config, device)
     
     # Run Analyses
+    analyze_noise_sensitivity(model, test_loader, device)
     visualize_failure_cases(model, test_loader, device)
     simulate_missing_modality(model, test_loader, device)

@@ -93,13 +93,15 @@ def create_model(config, device):
     return model.to(device)
 
 
-def train_epoch(model, train_loader, criterion, optimizer, device, epoch, modality='both'):
+def train_epoch(model, train_loader, criterion, optimizer, device, epoch, config):
     """
     Train for one epoch.
     
     Args:
-        modality: 'cxr', 'sputum', or 'both'
+    Args:
+        config: Configuration dictionary containing 'modality' and 'lambda_aux'
     """
+    modality = config.get('modality', 'both')
     model.train()
     running_loss = 0.0
     all_preds = []
@@ -124,10 +126,29 @@ def train_epoch(model, train_loader, criterion, optimizer, device, epoch, modali
         logits = outputs['logits']
         loss = criterion(logits, labels)
         
-        loss.backward()
-        optimizer.step()
-        
         running_loss += loss.item()
+        
+        # Auxiliary Loss: Force Uncertainty Variance
+        # Default behavior: Model outputs constant uncertainty (entropy ~ 1.0) because it's easier.
+        # Fix: Add a penalty if variance of uncertainty is low.
+        loss_aux = 0.0
+        lambda_aux = config.get('lambda_aux', 0.1)
+        
+        if 'uncertainty_cxr' in outputs:
+            # We want high variance (diversity) in uncertainty
+            # Minimize: -std(uncertainty) -> Maximize std
+            std_cxr = outputs['uncertainty_cxr'].std()
+            loss_aux -= std_cxr
+            
+        if 'uncertainty_sputum' in outputs:
+            std_spt = outputs['uncertainty_sputum'].std()
+            loss_aux -= std_spt
+            
+        # Add to main loss
+        total_loss = loss + lambda_aux * loss_aux
+        
+        total_loss.backward()
+        optimizer.step()
         preds = torch.argmax(logits, dim=1)
         all_preds.extend(preds.cpu().numpy())
         all_labels.extend(labels.cpu().numpy())
@@ -314,7 +335,7 @@ def train(config):
         
         # Train
         train_metrics = train_epoch(
-            model, train_loader, criterion, optimizer, device, epoch, modality
+            model, train_loader, criterion, optimizer, device, epoch, config
         )
         
         # Validate
@@ -432,6 +453,8 @@ def main():
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--epochs', type=int, default=None)
     parser.add_argument('--lr', type=float, default=None)
+    parser.add_argument('--lambda_aux', type=float, default=None,
+                        help='Weight for auxiliary uncertainty loss')
     
     args = parser.parse_args()
     
@@ -465,6 +488,8 @@ def main():
         config['num_epochs'] = args.epochs
     if args.lr:
         config['learning_rate'] = args.lr
+    if args.lambda_aux:
+        config['lambda_aux'] = args.lambda_aux
     
     print("\n" + "="*60)
     print("Configuration")

@@ -134,6 +134,26 @@ EXPERIMENTS = {
             'fmca_modulation': 'post',
             'description': 'FMCA with post-softmax scaling'
         }
+    },
+
+    # Ablation C: Lambda Sensitivity (Auxiliary Loss Weight)
+    'ablation_lambda': {
+        'mg_cmt_lambda_0_01': {
+            'model_type': 'mg_cmt',
+            'lambda_aux': 0.01,
+            'description': 'Lambda=0.01 (Weak Regularization)'
+        },
+        'mg_cmt_lambda_1_0': {
+            'model_type': 'mg_cmt',
+            'lambda_aux': 1.0,
+            'description': 'Lambda=1.0 (Strong Regularization)'
+        },
+        'mg_cmt_lambda_0_5': {
+            'model_type': 'mg_cmt',
+            'lambda_aux': 0.5,
+            'description': 'Lambda=0.5 (Moderate Regularization)'
+        }
+        # Note: Lambda=0.1 is the default 'mg_cmt' experiment
     }
 }
 

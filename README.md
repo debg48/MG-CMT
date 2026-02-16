@@ -53,6 +53,7 @@ A learnable fuzzy controller that serves as the fusion brain:
 - **Fuzzification**: Learnable Gaussian membership functions map uncertainty to fuzzy sets (Low, Medium, High)
 - **Inference**: Computes firing strengths of 9 fuzzy rules (3×3 combinations)
 - **Defuzzification**: Outputs scalars $\alpha$ (CXR confidence) and $\beta$ (Sputum confidence)
+- **Training**: Trained end-to-end with an **Entropy Regularization Loss** to force the model to learn diverse uncertainty estimates, preventing the FIS from collapsing to a static "sweet spot."
 
 **All operations are differentiable**, enabling end-to-end training.
 
