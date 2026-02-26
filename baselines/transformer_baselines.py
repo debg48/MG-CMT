@@ -3,7 +3,7 @@ Baseline models for comparison
 """
 import torch
 import torch.nn as nn
-from models.encoders import LightweightViT
+from models.encoders import LightweightViT, TransformerEncoder
 from models.fusion import StandardCrossAttention
 from models.fis import MamdaniFIS
 from models.fusion import FMCA
@@ -113,6 +113,83 @@ class ConcatFusion(nn.Module):
         }
 
 
+class StandardTransformerFusion(nn.Module):
+    """
+    Standard Fusion Baseline for Transformer Backbones (Swin, CvT, etc.).
+    """
+    def __init__(
+        self,
+        backbone='swin_tiny',
+        embed_dim=256,
+        num_classes=2,
+        dropout=0.1
+    ):
+        super().__init__()
+        
+        self.cxr_encoder = TransformerEncoder(
+            backbone_name=backbone,
+            embed_dim=embed_dim,
+            dropout=dropout,
+            pretrained=False
+        )
+        
+        self.sputum_encoder = TransformerEncoder(
+            backbone_name=backbone,
+            embed_dim=embed_dim,
+            dropout=dropout,
+            pretrained=False
+        )
+        
+        # Fusion Classifier
+        self.classifier = nn.Sequential(
+            nn.Linear(embed_dim * 2, embed_dim),
+            nn.LayerNorm(embed_dim),
+            nn.Dropout(dropout),
+            nn.ReLU(),
+            nn.Linear(embed_dim, num_classes)
+        )
+        
+    def forward(self, cxr, sputum):
+        """
+        Returns dict with 'logits'.
+        """
+        cxr_feats = self.cxr_encoder(cxr)
+        spt_feats = self.sputum_encoder(sputum)
+        
+        combined = torch.cat([cxr_feats, spt_feats], dim=1)
+        logits = self.classifier(combined)
+        
+        return {'logits': logits}
+
+
+class StandardTransformerUnimodal(nn.Module):
+    """
+    Standard Unimodal Baseline for Transformer Backbones (Swin, CvT, etc.).
+    """
+    def __init__(
+        self,
+        backbone='swin_tiny',
+        embed_dim=256,
+        num_classes=2,
+        dropout=0.1
+    ):
+        super().__init__()
+        
+        self.encoder = TransformerEncoder(
+            backbone_name=backbone,
+            embed_dim=embed_dim,
+            dropout=dropout,
+            pretrained=False
+        )
+        
+        self.classifier = nn.Linear(embed_dim, num_classes)
+        
+    def forward(self, x, dummy=None):
+        feats = self.encoder(x)
+        logits = self.classifier(feats)
+        return {'logits': logits}
+
+
 class VanillaCMT(nn.Module):
     """Vanilla Cross-Modal Transformer (no gating)."""
     def __init__(
@@ -172,7 +249,7 @@ class VanillaCMT(nn.Module):
         )
         fused = fused.squeeze(1)
         
-        # Residual connection from CXR features (Critical for fair comparison with MG-CMT)
+        # Residual connection from CXR features (Critical for fair comparison with MGM-TB-Net)
         if self.use_residual:
             fused = cxr_feats + fused
         
@@ -268,7 +345,7 @@ class ScalarGateFusion(nn.Module):
         )
         fused = fused.squeeze(1)
         
-        # Residual connection from CXR features (Critical for fair comparison with MG-CMT)
+        # Residual connection from CXR features (Critical for fair comparison with MGM-TB-Net)
         if self.use_residual:
             fused = cxr_feats + fused
         

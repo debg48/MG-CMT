@@ -1,0 +1,22 @@
+# MGM-TB-Net (Full Model) Configuration
+# Inherits base hyperparameters for fair comparison
+
+exp_name: mgm_tb_net
+model_type: mgm_tb_net
+modality: both
+fmca_modulation: post
+
+# Base hyperparameters (SAME FOR ALL MODELS)
+data_root: data/JU-LDD-task-b
+save_dir: checkpoints
+img_size: 224
+patch_size: 16
+num_layers: 4
+embed_dim: 192
+num_heads: 8
+dropout: 0.3
+batch_size: 4
+num_epochs: 30
+learning_rate: 0.0003
+weight_decay: 0.15
+num_workers: 2

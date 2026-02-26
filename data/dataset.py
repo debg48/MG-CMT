@@ -125,13 +125,13 @@ class TBMultimodalDataset(Dataset):
             return transforms.Compose([
                 transforms.Grayscale(num_output_channels=3),
                 transforms.Resize((self.img_size, self.img_size)),
-                transforms.RandomHorizontalFlip(p=0.5),
                 transforms.RandomRotation(degrees=10),
                 transforms.ColorJitter(brightness=0.2, contrast=0.2),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                    std=[0.229, 0.224, 0.225]),
-                AddGaussianNoise(std=0.6)  # Aggressive noise for regularization
+                # Gaussian noise to simulate radiographic sensor noise / exposure variations
+                AddGaussianNoise(std=0.6)
             ])
         else:
             # Validation/Test: NO augmentation, NO noise - just preprocessing
@@ -155,7 +155,9 @@ class TBMultimodalDataset(Dataset):
                 transforms.ColorJitter(brightness=0.3, contrast=0.3),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                   std=[0.229, 0.224, 0.225])
+                                   std=[0.229, 0.224, 0.225]),
+                # Random noise on sputum to simulate microscopy artifacts (Robustness)
+                transforms.RandomApply([AddGaussianNoise(std=0.3)], p=0.5)
             ])
         else:
             return transforms.Compose([
@@ -199,12 +201,118 @@ class TBMultimodalDataset(Dataset):
         return cxr, sputum, label, metadata
 
 
+class UnimodalCXRDataset(Dataset):
+    """
+    Dataset for CXR-only datasets (like "Dataset of Tuberculosis Chest X-rays Images").
+    Splits the directory deterministically and returns fake (zero) sputum to maintain compatibility.
+    """
+    def __init__(
+        self, 
+        data_root, 
+        split='train',
+        img_size=224,
+        augment=True,
+        train_ratio=0.7,
+        val_ratio=0.15,
+        seed=42
+    ):
+        self.data_root = Path(data_root)
+        self.split = split
+        self.img_size = img_size
+        
+        # Load all samples
+        all_samples = []
+        
+        class_dirs = {
+            'TB Chest X-rays': 1,
+            'Normal Chest X-rays': 0
+        }
+        
+        for class_name, label in class_dirs.items():
+            class_dir = self.data_root / class_name
+            if not class_dir.exists():
+                print(f"Warning: {class_name} directory not found in {data_root}")
+                continue
+                
+            for ext in ['*.png', '*.jpg', '*.jpeg']:
+                for img_path in sorted(class_dir.glob(ext)):
+                    all_samples.append({
+                        'cxr_path': str(img_path),
+                        'sputum_path': 'none',
+                        'label': label,
+                        'class_name': class_name,
+                        'id': img_path.stem
+                    })
+                
+        # Split data deterministically
+        import random
+        random.seed(seed)
+        random.shuffle(all_samples)
+        
+        n_total = len(all_samples)
+        n_train = int(n_total * train_ratio)
+        n_val = int(n_total * val_ratio)
+        
+        if split == 'train':
+            self.samples = all_samples[:n_train]
+        elif split == 'val':
+            self.samples = all_samples[n_train:n_train+n_val]
+        else: # test
+            self.samples = all_samples[n_train+n_val:]
+            
+        print(f"Loaded {len(self.samples)} CXR-only samples for {split} split")
+        
+        # CXR transforms (reused logic)
+        if augment and split == 'train':
+            self.cxr_transform = transforms.Compose([
+                transforms.Grayscale(num_output_channels=3),
+                transforms.Resize((self.img_size, self.img_size)),
+                transforms.RandomRotation(degrees=10),
+                transforms.ColorJitter(brightness=0.2, contrast=0.2),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                AddGaussianNoise(std=0.6)
+            ])
+        else:
+            self.cxr_transform = transforms.Compose([
+                transforms.Grayscale(num_output_channels=3),
+                transforms.Resize((self.img_size, self.img_size)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            ])
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        sample = self.samples[idx]
+        
+        cxr = Image.open(sample['cxr_path']).convert('RGB')
+        cxr = self.cxr_transform(cxr)
+        
+        # Fake sputum tensor (all zeros) for model compatibility
+        sputum = torch.zeros_like(cxr)
+        
+        label = torch.tensor(sample['label'], dtype=torch.long)
+        
+        metadata = {
+            'id': sample['id'],
+            'class_name': sample['class_name'],
+            'cxr_path': sample['cxr_path'],
+            'sputum_path': sample['sputum_path']
+        }
+        
+        return cxr, sputum, label, metadata
+
+
+
 def get_dataloaders(
     data_root,
     batch_size=4,
     img_size=224,
     num_workers=2,
-    pin_memory=False
+    pin_memory=False,
+    is_unimodal=False
 ):
     """
     Create train, val, and test dataloaders.
@@ -215,18 +323,21 @@ def get_dataloaders(
         img_size: Image size
         num_workers: Number of data loading workers
         pin_memory: Whether to pin memory (faster for GPU)
+        is_unimodal: Use UnimodalCXRDataset instead of TBMultimodalDataset
     
     Returns:
         train_loader, val_loader, test_loader
     """
+    dataset_class = UnimodalCXRDataset if is_unimodal else TBMultimodalDataset
+    
     # Create datasets
-    train_dataset = TBMultimodalDataset(
+    train_dataset = dataset_class(
         data_root, split='train', img_size=img_size, augment=True
     )
-    val_dataset = TBMultimodalDataset(
+    val_dataset = dataset_class(
         data_root, split='val', img_size=img_size, augment=False
     )
-    test_dataset = TBMultimodalDataset(
+    test_dataset = dataset_class(
         data_root, split='test', img_size=img_size, augment=False
     )
     

@@ -1,5 +1,5 @@
 """
-Experiment runner for all MG-CMT experiments
+Experiment runner for all MGM-TB-Net experiments
 Coordinates training of all models from the experimental plan
 """
 import os
@@ -43,10 +43,10 @@ EXPERIMENTS = {
             'description': 'Learnable sigmoid gate',
             'use_residual': False
         },
-        'mg_cmt': {
-            'model_type': 'mgm_tb_former',
+        'mgm_tb_net': {
+            'model_type': 'mgm_tb_net',
             'fmca_modulation': 'logit',
-            'description': 'Full MGM-TB-Former (ours)'
+            'description': 'Full MGM-TB-Net (ours)'
         }
     },
     
@@ -79,10 +79,71 @@ EXPERIMENTS = {
         'concat_noise_2': {'model_type': 'concat', 'modality': 'both', 'kwargs': {'cxr_noise': 0.2}, 'desc': 'Concat Fusion (Noise 0.2)'},
         'concat_noise_3': {'model_type': 'concat', 'modality': 'both', 'kwargs': {'cxr_noise': 0.3}, 'desc': 'Concat Fusion (Noise 0.3)'},
         
-        # MG-CMT (Ours)
-        'mg_cmt_noise_1': {'model_type': 'mg_cmt', 'modality': 'both', 'kwargs': {'cxr_noise': 0.1}, 'desc': 'MG-CMT (Noise 0.1)'},
-        'mg_cmt_noise_2': {'model_type': 'mg_cmt', 'modality': 'both', 'kwargs': {'cxr_noise': 0.2}, 'desc': 'MG-CMT (Noise 0.2)'},
-        'mg_cmt_noise_3': {'model_type': 'mg_cmt', 'modality': 'both', 'kwargs': {'cxr_noise': 0.3}, 'desc': 'MG-CMT (Noise 0.3)'},
+        # MGM-TB-Net (Ours)
+        'mgm_tb_net_noise_1': {'model_type': 'mgm_tb_net', 'modality': 'both', 'kwargs': {'cxr_noise': 0.1}, 'desc': 'MGM-TB-Net (Noise 0.1)'},
+        'mgm_tb_net_noise_2': {'model_type': 'mgm_tb_net', 'modality': 'both', 'kwargs': {'cxr_noise': 0.2}, 'desc': 'MGM-TB-Net (Noise 0.2)'},
+        'mgm_tb_net_noise_3': {'model_type': 'mgm_tb_net', 'modality': 'both', 'kwargs': {'cxr_noise': 0.3}, 'desc': 'MGM-TB-Net (Noise 0.3)'},
+    },
+
+    # -------------------------------------------------------
+    # Dataset 2 Comparative Analysis (CXR-only)
+    # -------------------------------------------------------
+    'dataset2_comparison': {
+        'densenet121': {
+            'model_type': 'cnn_unimodal',
+            'backbone': 'densenet121',
+            'data_root': 'data/Dataset of Tuberculosis Chest X-rays Images',
+            'is_unimodal': True,
+            'modality': 'cxr',
+            'description': 'DenseNet121 Dataset 2 Comparison'
+        },
+        'resnet_50': {
+            'model_type': 'cnn_unimodal',
+            'backbone': 'resnet50',
+            'data_root': 'data/Dataset of Tuberculosis Chest X-rays Images',
+            'is_unimodal': True,
+            'modality': 'cxr',
+            'description': 'ResNet-50 Dataset 2 Comparison'
+        },
+        'efficientnet_v2_s': {
+            'model_type': 'cnn_unimodal',
+            'backbone': 'efficientnet_v2_s',
+            'data_root': 'data/Dataset of Tuberculosis Chest X-rays Images',
+            'is_unimodal': True,
+            'modality': 'cxr',
+            'description': 'EfficientNetV2-S Dataset 2 Comparison'
+        },
+        'vit_tiny': {
+            'model_type': 'transformer_unimodal',
+            'backbone': 'vit_tiny',
+            'data_root': 'data/Dataset of Tuberculosis Chest X-rays Images',
+            'is_unimodal': True,
+            'modality': 'cxr',
+            'description': 'ViT-Tiny Dataset 2 Comparison'
+        },
+        'swin_tiny': {
+            'model_type': 'transformer_unimodal',
+            'backbone': 'swin_tiny',
+            'data_root': 'data/Dataset of Tuberculosis Chest X-rays Images',
+            'is_unimodal': True,
+            'modality': 'cxr',
+            'description': 'Swin-Tiny Dataset 2 Comparison'
+        },
+        'cvt_tiny': {
+            'model_type': 'transformer_unimodal',
+            'backbone': 'cvt_tiny',
+            'data_root': 'data/Dataset of Tuberculosis Chest X-rays Images',
+            'is_unimodal': True,
+            'modality': 'cxr',
+            'description': 'CvT-Tiny Dataset 2 Comparison'
+        },
+        'mgm_tb_net_dataset2': {
+            'model_type': 'mgm_tb_net',
+            'data_root': 'data/Dataset of Tuberculosis Chest X-rays Images',
+            'is_unimodal': True,
+            'modality': 'both',
+            'description': 'MGM-TB-Net Dataset 2 Comparison (Sputum=0)'
+        }
     },
 
     # -------------------------------------------------------
@@ -90,23 +151,23 @@ EXPERIMENTS = {
     # -------------------------------------------------------
     # Ablation A: FIS variants
     'ablation_fis': {
-        'mg_cmt_mamdani': {
-            'model_type': 'mg_cmt',
+        'mgm_tb_net_mamdani': {
+            'model_type': 'mgm_tb_net',
             'fis_type': 'mamdani',
             'description': 'Full Mamdani FIS'
         },
-        'mg_cmt_no_gate': {
+        'mgm_tb_net_no_gate': {
             'model_type': 'vanilla_cmt',
             'description': 'No gating (alpha=1)',
             'use_residual': True
         },
-        'mg_cmt_mlp_gate': {
+        'mgm_tb_net_mlp_gate': {
             'model_type': 'scalar_gate',
             'gate_type': 'mlp',
             'description': 'MLP gate instead of FIS',
             'use_residual': True
         },
-        'mg_cmt_sigmoid_gate': {
+        'mgm_tb_net_sigmoid_gate': {
             'model_type': 'scalar_gate',
             'gate_type': 'sigmoid',
             'description': 'Sigmoid gate instead of FIS',
@@ -117,20 +178,16 @@ EXPERIMENTS = {
     # Ablation B: FMCA mechanism (comparing modulation strategies)
     # All experiments here use residual connections for fair comparison:
     # - fmca_standard: uses vanilla_cmt + use_residual=True (explicit flag)
-    # - fmca_logit_scale/post_scale: use mg_cmt (residual is hardcoded in MGCMT class)
+    # - fmca_logit_scale/post_scale: use mgm_tb_net (residual is hardcoded in MGCMT class)
     'ablation_fmca': {
         'fmca_standard': {
             'model_type': 'vanilla_cmt',
             'description': 'Standard cross-attention',
-            'use_residual': True  # Matches mg_cmt residual for fair comparison
+            'use_residual': True  # Matches mgm_tb_net residual for fair comparison
         },
-        'fmca_logit_scale': {
-            'model_type': 'mgm_tb_former',  # mg_cmt has residual built-in
-            'fmca_modulation': 'logit',
-            'description': 'FMCA with logit scaling (ours)'
-        },
+        # Note: fmca_logit_scale removed — identical to mgm_tb_net (both use mgm_tb_net + logit)
         'fmca_post_scale': {
-            'model_type': 'mgm_tb_former',  # mgm_tb_former has residual built-in
+            'model_type': 'mgm_tb_net',  # mgm_tb_net has residual built-in
             'fmca_modulation': 'post',
             'description': 'FMCA with post-softmax scaling'
         }
@@ -138,22 +195,22 @@ EXPERIMENTS = {
 
     # Ablation C: Lambda Sensitivity (Auxiliary Loss Weight)
     'ablation_lambda': {
-        'mg_cmt_lambda_0_01': {
-            'model_type': 'mg_cmt',
+        'mgm_tb_net_lambda_0_01': {
+            'model_type': 'mgm_tb_net',
             'lambda_aux': 0.01,
             'description': 'Lambda=0.01 (Weak Regularization)'
         },
-        'mg_cmt_lambda_1_0': {
-            'model_type': 'mg_cmt',
+        'mgm_tb_net_lambda_1_0': {
+            'model_type': 'mgm_tb_net',
             'lambda_aux': 1.0,
             'description': 'Lambda=1.0 (Strong Regularization)'
         },
-        'mg_cmt_lambda_0_5': {
-            'model_type': 'mg_cmt',
+        'mgm_tb_net_lambda_0_5': {
+            'model_type': 'mgm_tb_net',
             'lambda_aux': 0.5,
             'description': 'Lambda=0.5 (Moderate Regularization)'
         }
-        # Note: Lambda=0.1 is the default 'mg_cmt' experiment
+        # Note: Lambda=0.1 is the default 'mgm_tb_net' experiment
     }
 }
 
@@ -213,7 +270,7 @@ def run_experiment_suite(suite_name, base_config, dry_run=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Run MG-CMT experiments')
+    parser = argparse.ArgumentParser(description='Run MGM-TB-Net experiments')
     parser.add_argument('--suite', type=str, choices=list(EXPERIMENTS.keys()) + ['all'],
                         default='tier1', help='Experiment suite to run')
     parser.add_argument('--experiment', type=str, default=None,
@@ -252,12 +309,12 @@ def main():
             'img_size': 224,
             'patch_size': 16,
             'num_layers': 4,
-            'embed_dim': 256,
+            'embed_dim': 192,
             'num_heads': 8,
             'batch_size': 4,
-            'num_epochs': 50,
-            'learning_rate': 1e-4,
-            'weight_decay': 0.01,
+            'num_epochs': 30,
+            'learning_rate': 0.0003,
+            'weight_decay': 0.15,
             'num_workers': 2
         }
     

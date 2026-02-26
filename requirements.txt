@@ -1,4 +1,4 @@
-# MG-CMT Requirements
+# MGM-TB-Net Requirements
 # Optimized for Apple M4 Air
 
 # Core Deep Learning

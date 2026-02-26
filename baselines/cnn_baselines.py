@@ -14,7 +14,7 @@ class StandardCNNFusion(nn.Module):
     4. Two-Layer MLP Classifier
     
     This represents the 'standard way' to do multimodal fusion with CNNs,
-    providing a strong baseline to compare MG-CMT against.
+    providing a strong baseline to compare MGM-TB-Net against.
     """
     def __init__(
         self,

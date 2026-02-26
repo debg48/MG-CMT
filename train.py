@@ -16,9 +16,10 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import numpy as np
 
-from models.mgm_tb_former import MGMTBFormer
+from models.mgm_tb_net import MGMTBNet
 from baselines.transformer_baselines import (
-    UnimodalModel, ConcatFusion, VanillaCMT, ScalarGateFusion
+    UnimodalModel, ConcatFusion, VanillaCMT, ScalarGateFusion,
+    StandardTransformerFusion, StandardTransformerUnimodal
 )
 from models.encoders import CNNEncoder
 from baselines.cnn_baselines import StandardCNNFusion, StandardCNNUnimodal
@@ -31,7 +32,7 @@ from utils.visualization import (
 
 def create_model(config, device):
     """Create model based on config."""
-    model_type = config.get('model_type', 'mg_cmt')
+    model_type = config.get('model_type', 'mgm_tb_net')
     
     common_args = {
         'img_size': config['img_size'],
@@ -58,8 +59,8 @@ def create_model(config, device):
             gate_type=config.get('gate_type', 'mlp'),
             use_residual=config.get('use_residual', False)
         )
-    elif model_type in ['mg_cmt', 'mgm_tb_former']:
-        model = MGMTBFormer(
+    elif model_type in ['mg_cmt', 'mgm_tb_former', 'mgm_tb_net']:
+        model = MGMTBNet(
             img_size=config['img_size'],
             patch_size=config['patch_size'],
             num_transformer_layers=config['num_layers'],
@@ -81,6 +82,33 @@ def create_model(config, device):
         # Standard CNN Fusion (Concat)
         backbone_name = config.get('backbone', 'resnet50')
         model = StandardCNNFusion(
+            backbone=backbone_name,
+            embed_dim=config['embed_dim'],
+            num_classes=2,
+            dropout=config.get('dropout', 0.1)
+        )
+    elif model_type == 'cnn_unimodal':
+        # Standard CNN Unimodal
+        backbone_name = config.get('backbone', 'resnet50')
+        model = StandardCNNUnimodal(
+            backbone=backbone_name,
+            embed_dim=config['embed_dim'],
+            num_classes=2,
+            dropout=config.get('dropout', 0.1)
+        )
+    elif model_type == 'transformer_fusion':
+        # Standard Transformer Fusion (Concat)
+        backbone_name = config.get('backbone', 'swin_tiny')
+        model = StandardTransformerFusion(
+            backbone=backbone_name,
+            embed_dim=config['embed_dim'],
+            num_classes=2,
+            dropout=config.get('dropout', 0.1)
+        )
+    elif model_type == 'transformer_unimodal':
+        # Standard Transformer Unimodal
+        backbone_name = config.get('backbone', 'swin_tiny')
+        model = StandardTransformerUnimodal(
             backbone=backbone_name,
             embed_dim=config['embed_dim'],
             num_classes=2,
@@ -232,7 +260,17 @@ def train(config):
     
     # Create output directory
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    exp_name = f"{config['exp_name']}_{timestamp}"
+    
+    # Infer dataset name
+    data_root = config.get('data_root', '')
+    if 'JU-LDD' in data_root:
+        dataset_name = 'dataset1'
+    elif 'Dataset of Tuberculosis' in data_root:
+        dataset_name = 'dataset2'
+    else:
+        dataset_name = Path(data_root).name
+
+    exp_name = f"{config.get('exp_name', config.get('model_type', 'model'))}_{dataset_name}_{timestamp}"
     save_dir = Path(config['save_dir']) / exp_name
     plots_dir = save_dir / 'plots'
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -257,7 +295,8 @@ def train(config):
         data_root=config['data_root'],
         batch_size=config['batch_size'],
         img_size=config['img_size'],
-        num_workers=config['num_workers']
+        num_workers=config['num_workers'],
+        is_unimodal=config.get('is_unimodal', False)
     )
     
     print(f"Dataset loading complete!")
@@ -270,7 +309,7 @@ def train(config):
     print("="*60)
     print("INITIALIZING MODEL")
     print("="*60)
-    print(f"Model type: {config.get('model_type', 'mg_cmt')}")
+    print(f"Model type: {config.get('model_type', 'mgm_tb_net')}")
     print(f"Architecture: {config['num_layers']} layers, {config['embed_dim']}-dim, {config['num_heads']} heads")
     print(f"Modality: {config.get('modality', 'both')}")
     print("")
@@ -444,10 +483,10 @@ def train(config):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Train MG-CMT')
+    parser = argparse.ArgumentParser(description='Train MGM-TB-Net')
     parser.add_argument('--config', type=str, default='configs/default.yaml')
-    parser.add_argument('--model_type', type=str, default='mg_cmt',
-                        choices=['unimodal', 'concat', 'vanilla_cmt', 'scalar_gate', 'mg_cmt'])
+    parser.add_argument('--model_type', type=str, default='mgm_tb_net',
+                        choices=['unimodal', 'concat', 'vanilla_cmt', 'scalar_gate', 'mg_cmt', 'mgm_tb_net'])
     parser.add_argument('--modality', type=str, default='both',
                         choices=['cxr', 'sputum', 'both'])
     parser.add_argument('--batch_size', type=int, default=None)
@@ -455,6 +494,8 @@ def main():
     parser.add_argument('--lr', type=float, default=None)
     parser.add_argument('--lambda_aux', type=float, default=None,
                         help='Weight for auxiliary uncertainty loss')
+    parser.add_argument('--is_unimodal', action='store_true',
+                        help='Use UnimodalCXRDataset for CXR-only datasets')
     
     args = parser.parse_args()
     
@@ -464,18 +505,18 @@ def main():
             config = yaml.safe_load(f)
     else:
         config = {
-            'exp_name': 'mg_cmt',
+            'exp_name': 'mgm_tb_net',
             'data_root': 'data/JU-LDD-task-b',
             'save_dir': 'checkpoints',
             'img_size': 224,
             'patch_size': 16,
             'num_layers': 4,
-            'embed_dim': 256,
+            'embed_dim': 192,
             'num_heads': 8,
             'batch_size': 4,
-            'num_epochs': 50,
-            'learning_rate': 1e-4,
-            'weight_decay': 0.01,
+            'num_epochs': 30,
+            'learning_rate': 0.0003,
+            'weight_decay': 0.15,
             'num_workers': 2
         }
     
@@ -490,6 +531,7 @@ def main():
         config['learning_rate'] = args.lr
     if args.lambda_aux:
         config['lambda_aux'] = args.lambda_aux
+    config['is_unimodal'] = args.is_unimodal
     
     print("\n" + "="*60)
     print("Configuration")

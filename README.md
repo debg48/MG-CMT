@@ -1,4 +1,4 @@
-# MGM-TB-Former: Mamdani-Gated Multimodal Transformer (MGM-TB-Former)
+# MGM-TB-Net: Mamdani-Gated Multimodal Transformer
 
 **Author:** Debgandhar Ghosh  
 **Date:** January 2026  
@@ -6,11 +6,11 @@
 
 ## 🔬 Overview
 
-**MGM-TB-Former** (formerly MG-CMT) is a novel **Hybrid Convolutional-Transformer** architecture designed for robust multimodal medical image analysis. It specifically targets the challenge of fusing **Chest X-Rays (CXR)** (high structural consistency) with **Sputum Smear Microscopy** (high diagnostic value but high noise/variance) for the automated detection of Tuberculosis.
+**MGM-TB-Net** is a novel **Hybrid Convolutional-Transformer** architecture designed for robust multimodal medical image analysis. It specifically targets the challenge of fusing **Chest X-Rays (CXR)** (high structural consistency) with **Sputum Smear Microscopy** (high diagnostic value but high noise/variance) for the automated detection of Tuberculosis.
 
 This model leverages a **Convolutional Stem** for local feature extraction and a **Vision Transformer Body** for global context, modulated by a **Fuzzy Inference System** to handle uncertainty.
 
-This repository contains the official PyTorch implementation of MGM-TB-Former.
+This repository contains the official PyTorch implementation of MGM-TB-Net.
 
 ## 🧠 The Problem: "Feature Wash-out"
 
@@ -23,7 +23,7 @@ Naive fusion allows the noise from poor-quality sputum slides to corrupt (or "wa
 
 ## 💡 The Solution: Neuro-Fuzzy Gating
 
-MGM-TB-Former introduces a **Differentiable Mamdani Fuzzy Inference System (FIS)** that acts as a cognitive gatekeeper. Instead of blindly trusting all inputs, the model:
+MGM-TB-Net introduces a **Differentiable Mamdani Fuzzy Inference System (FIS)** that acts as a cognitive gatekeeper. Instead of blindly trusting all inputs, the model:
 
 1. **Measures Uncertainty**: Calculates entropy from each modality's preliminary predictions.
 2. **Applies Fuzzy Logic**: Uses human-interpretable rules (e.g., *"If Sputum is Uncertain, reduce its influence"*).
@@ -109,15 +109,15 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Train MGM-TB-Former
-python3 train.py --config configs/mgm_tb_former.yaml
+# 2. Train MGM-TB-Net
+python3 train.py --config configs/mgm_tb_net.yaml
 ```
 
 ### Train Individual Models
 
 ```bash
 # Your model
-python3 train.py --config configs/mgm_tb_former.yaml
+python3 train.py --config configs/mgm_tb_net.yaml
 
 # Baselines
 python3 train.py --config configs/cxr_only.yaml
@@ -130,7 +130,7 @@ python3 train.py --config configs/scalar_gate_mlp.yaml
 ### Override Settings
 
 ```bash
-python3 train.py --config configs/mgm_tb_former.yaml --epochs 100 --batch_size 8
+python3 train.py --config configs/mgm_tb_net.yaml --epochs 100 --batch_size 8
 ```
 
 ### Monitor Training
@@ -163,13 +163,13 @@ This will generate the following plots in the `results/` directory:
 │   ├── encoders.py     # Custom 4-layer ViT with 2D-RoPE
 │   ├── fis.py          # Differentiable Mamdani FIS
 │   ├── fusion.py       # FMCA Layer (logit & post-softmax variants)
-│   └── mgm_tb_former.py # Complete MGM-TB-Former architecture
-├── baselines/          # Baseline fusion methods (concat, late fusion, scalar gate)
+│   └── mgm_tb_net.py   # Complete MGM-TB-Net architecture
+├── baselines/          # Baseline fusion methods (CNN Backbones: ResNet, DenseNet, EfficientNet; Transformer Backbones: ViT, Swin, CvT)
 ├── data/               # Dataset loaders
 │   └── JU-LDD-task-b/  # TB detection dataset
 ├── experiments/        # Training & evaluation scripts
 ├── configs/            # Hyperparameter configuration
-│   └── mgm_tb_former.yaml
+│   └── mgm_tb_net.yaml
 ├── utils/              # Metrics, visualization, statistical tests
 ├── scripts/            # Experiment runners, plotting
 └── requirements.txt    # Python dependencies
@@ -189,7 +189,7 @@ This will generate the following plots in the `results/` directory:
 |:---|---:|---:|---:|
 | ViT-Base (pretrained) | 86M | 17.6G | 12GB |
 | ViT-Small | 22M | 4.6G | 6GB |
-| **MGM-TB-Former (Ours)** | **10.5M** | **2.1G** | **4GB** |
+| **MGM-TB-Net (Ours)** | **10.5M** | **2.1G** | **4GB** |
 
 ## 📝 Citation
 
@@ -213,7 +213,7 @@ All models use **IDENTICAL** hyperparameters to ensure fair comparison:
 - **Training**: 50 epochs, batch size 4, learning rate 1e-4
 - **Optimizer**: AdamW with weight decay 0.01
 - **Scheduler**: CosineAnnealingLR
-- **Data Augmentation**: Identical for CXR and Sputum across all models
+- **Data Augmentation**: Strict augmentation. **CXR:** Rotations/Color Jitter (No flips to preserve anatomy). **Sputum:** Random Flips & Noise ($\sigma=0.3$) for robustness.
 
 Only model-specific parameters differ (e.g., `model_type`, `modality`, `gate_type`).
 
@@ -244,15 +244,18 @@ Use the experiment runner for batch execution:
 # List all available experiments
 python3 run_experiments.py --list
 
-# Run Tier 1 (7 baselines + MGM-TB-Former)
+# Run Tier 1 (7 baselines + MGM-TB-Net)
 python3 run_experiments.py --suite tier1 --epochs 50
 
 # Run ablation studies
 python3 run_experiments.py --suite ablation_fis
 python3 run_experiments.py --suite ablation_fmca
 
+# Run Dataset 2 Comparative Analysis
+python3 run_experiments.py --suite dataset2_comparison
+
 # Run specific experiment
-python3 run_experiments.py --experiment mgm_tb_former
+python3 run_experiments.py --experiment mgm_tb_net
 
 # Dry run (test without training)
 python3 run_experiments.py --suite tier1 --dry_run
@@ -262,7 +265,7 @@ python3 run_experiments.py --suite tier1 --dry_run
 
 ### Main Performance Comparison
 
-We evaluated MGM-TB-Former against unimodal baselines, naive fusion methods, and state-of-the-art multimodal approaches on the JU-LDD-task-b test set.
+We evaluated MGM-TB-Net against unimodal baselines, naive fusion methods, and state-of-the-art multimodal approaches on the JU-LDD-task-b test set.
 
 | Model | Accuracy | Precision | Recall | F1-Score | AUC-ROC | Notes |
 |:---|:---:|:---:|:---:|:---:|:---:|:---|
@@ -275,18 +278,18 @@ We evaluated MGM-TB-Former against unimodal baselines, naive fusion methods, and
 | ResNet-50 Fusion | 0.9600 | 0.9792 | 0.9400 | 0.9592 | 0.9964 | CNN baseline |
 | EfficientNet-B0 Fusion | 0.9100 | 0.9767 | 0.8400 | 0.9032 | 0.9288 | CNN baseline |
 | MobileNetV2 Fusion | 0.6300 | 0.6102 | 0.7200 | 0.6606 | 0.6760 | CNN baseline |
-| **MGM-TB-Former (Ours)** | **0.9900** | **1.0000** | **0.9800** | **0.9899** | **0.9976** | **Fuzzy gating + Residual** |
+| **MGM-TB-Net (Ours)** | **0.9900** | **1.0000** | **0.9800** | **0.9899** | **0.9976** | **Fuzzy gating + Residual** |
 
 ### 🔑 Key Finding: The Critical Role of Residual Connections
 
-Our ablation studies revealed a **critical architectural insight**: the residual connection is the dominant factor in MGM-TB-Former's superior performance.
+Our ablation studies revealed a **critical architectural insight**: the residual connection is the dominant factor in MGM-TB-Net's superior performance.
 
-| Experiment | Model | Residual? | F1-Score | Δ from MGM-TB-Former |
+| Experiment | Model | Residual? | F1-Score | Δ from MGM-TB-Net |
 |:---|:---|:---:|:---:|:---:|
 | Tier 1 Baseline | Vanilla CMT | ❌ No | 0.6441 | -0.3458 |
 | Tier 1 Baseline | Scalar Gate (MLP) | ❌ No | 0.6486 | -0.3413 |
-| **Ablation Study** | MGM-TB-Former w/o Fuzzy Gate | ✅ Yes | **0.9697** | **-0.0202** |
-| **Full Model** | MGM-TB-Former | ✅ Yes | **0.9899** | — |
+| **Ablation Study** | MGM-TB-Net w/o Fuzzy Gate | ✅ Yes | **0.9697** | **-0.0202** |
+| **Full Model** | MGM-TB-Net | ✅ Yes | **0.9899** | — |
 
 **What This Tells Us:**
 
@@ -341,7 +344,7 @@ We observed a critical failure mode in standard cross-attention architectures:
 |:---|:---:|:---|
 | CXR-Only | 0.9167 | Strong unimodal baseline |
 | Vanilla CMT | **0.6441** | Cross-attention *hurts* performance! |
-| **MGM-TB-Former** | **0.9899** | Gated fusion *helps* |
+| **MGM-TB-Net** | **0.9899** | Gated fusion *helps* |
 
 **What Happened?**
 
@@ -349,7 +352,7 @@ We observed a critical failure mode in standard cross-attention architectures:
 2. When sputum is noisy/unreliable, these corrupted features "wash out" the clean CXR representation.
 3. The model performs *worse* than using CXR alone!
 
-**How MGM-TB-Former Solves This:**
+**How MGM-TB-Net Solves This:**
 
 1. **Fuzzy Gating ($\beta$):** Detects high uncertainty in sputum → suppresses attention weights.
 2. **Residual Connection:** `fused = CXR_feats + β × CrossAttn(CXR, Sputum)` ensures fallback to reliable CXR features when $\beta \to 0$.

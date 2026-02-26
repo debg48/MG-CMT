@@ -316,14 +316,24 @@ class CNNEncoder(nn.Module):
         elif backbone_name == 'efficientnet_b0':
             base_model = models.efficientnet_b0(weights=weights)
             self.feature_dim = base_model.classifier[1].in_features
-            # Remove classifier
+            self.features = base_model.features
+            self.pool = nn.AdaptiveAvgPool2d(1)
+            
+        elif backbone_name == 'efficientnet_v2_s':
+            base_model = models.efficientnet_v2_s(weights=weights)
+            self.feature_dim = base_model.classifier[1].in_features
+            self.features = base_model.features
+            self.pool = nn.AdaptiveAvgPool2d(1)
+            
+        elif backbone_name == 'densenet121':
+            base_model = models.densenet121(weights=weights)
+            self.feature_dim = base_model.classifier.in_features
             self.features = base_model.features
             self.pool = nn.AdaptiveAvgPool2d(1)
             
         elif backbone_name == 'mobilenet_v2':
             base_model = models.mobilenet_v2(weights=weights)
             self.feature_dim = base_model.classifier[1].in_features
-            # Remove classifier
             self.features = base_model.features
             self.pool = nn.AdaptiveAvgPool2d(1)
             
@@ -348,7 +358,10 @@ class CNNEncoder(nn.Module):
         x = self.features(x)
         
         # Handle pooling differences
-        if self.backbone_name in ['efficientnet_b0', 'mobilenet_v2']:
+        if self.backbone_name in ['efficientnet_b0', 'efficientnet_v2_s', 'mobilenet_v2']:
+            x = self.pool(x)
+        elif self.backbone_name in ['densenet121']:
+            x = F.relu(x, inplace=True)
             x = self.pool(x)
             
         x = torch.flatten(x, 1)  # [B, feature_dim]
@@ -356,6 +369,56 @@ class CNNEncoder(nn.Module):
         
         return features
 
+
+class TransformerEncoder(nn.Module):
+    """
+    Wrapper for standard Transformer backbones (Swin, ViT, CvT).
+    Adapts them to the MG-CMT interface (extract features).
+    """
+    def __init__(self, backbone_name='swin_tiny', embed_dim=256, dropout=0.1, pretrained=False):
+        super().__init__()
+        
+        try:
+            import timm
+        except ImportError:
+            raise ImportError("Please install timm to use Transformer backbones: pip install timm")
+            
+        self.backbone_name = backbone_name
+        
+        # Mapping custom names to timm names
+        timm_names = {
+            'vit_tiny': 'vit_tiny_patch16_224',
+            'swin_tiny': 'swin_tiny_patch4_window7_224',
+            'cvt_tiny': 'cvt_13'
+        }
+        
+        if backbone_name not in timm_names:
+            raise ValueError(f"Backbone {backbone_name} not supported. Try one of {list(timm_names.keys())}")
+            
+        # create_model with num_classes=0 returns pooled features
+        self.model = timm.create_model(
+            timm_names[backbone_name], 
+            pretrained=pretrained, 
+            num_classes=0
+        )
+        self.feature_dim = self.model.num_features
+        
+        # Projection to shared embedding dim
+        self.proj = nn.Sequential(
+            nn.Linear(self.feature_dim, embed_dim),
+            nn.LayerNorm(embed_dim),
+            nn.Dropout(dropout)
+        )
+
+    def forward(self, x):
+        """
+        Returns:
+            features: [batch, embed_dim]
+        """
+        features = self.model(x)  # [B, feature_dim]
+        features = self.proj(features)  # [B, embed_dim]
+        
+        return features
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -371,11 +434,8 @@ if __name__ == "__main__":
     print(f"ViT params: {count_parameters(vit):,}")
     
     print("\n--- CNN Backbones ---")
-    for bb in ['resnet50', 'efficientnet_b0', 'mobilenet_v2']:
+    for bb in ['resnet50', 'efficientnet_v2_s']:
         cnn = CNNEncoder(backbone_name=bb, embed_dim=256).to(device)
         print(f"{bb}: {count_parameters(cnn):,} params")
-        
-        x = torch.randn(2, 3, 224, 224).to(device)
-        feat = cnn(x)
-        print(f"  Output: {feat.shape}")
+
 

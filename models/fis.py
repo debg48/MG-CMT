@@ -121,11 +121,9 @@ class MamdaniFIS(nn.Module):
         firing_strengths = []
         for i in range(self.num_membership_funcs):  # CXR fuzzy set
             for j in range(self.num_membership_funcs):  # Sputum fuzzy set
-                # AND operator: min(mu_cxr[i], mu_sputum[j])
-                strength = torch.min(
-                    mu_cxr[:, i], 
-                    mu_sputum[:, j]
-                )  # [batch]
+                # AND operator: Product T-Norm (better gradients)
+                # strength = mu_cxr[i] * mu_sputum[j]
+                strength = mu_cxr[:, i] * mu_sputum[:, j]
                 firing_strengths.append(strength)
         
         firing_strengths = torch.stack(firing_strengths, dim=1)  # [batch, 9]
@@ -142,8 +140,11 @@ class MamdaniFIS(nn.Module):
         beta = (normalized_strengths * self.rule_outputs_beta.unsqueeze(0)).sum(dim=1)   # [batch]
         
         # Clamp to [0, 1] for stability
-        alpha = torch.sigmoid(alpha)  # Ensure [0, 1]
-        beta = torch.sigmoid(beta)
+        # NOTE: Rule consequents are already in [0,1], so their weighted average
+        # is naturally bounded. Using clamp instead of sigmoid avoids compressing
+        # the dynamic range (sigmoid on [0,1] input → [0.5, 0.73] output).
+        alpha = torch.clamp(alpha, 0.0, 1.0)
+        beta = torch.clamp(beta, 0.0, 1.0)
         
         return alpha, beta
     
