@@ -225,7 +225,9 @@ class UnimodalCXRDataset(Dataset):
         
         class_dirs = {
             'TB Chest X-rays': 1,
-            'Normal Chest X-rays': 0
+            'Normal Chest X-rays': 0,
+            'Tuberculosis': 1,
+            'Normal': 0
         }
         
         for class_name, label in class_dirs.items():

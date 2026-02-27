@@ -153,6 +153,19 @@ This will generate the following plots in the `results/` directory:
 1. **`failure_case_viz.png`**: Visualizes how the model handles sensor failure (Noisy CXR + Clean Sputum).
 2. **`missing_modality.png`**: Benchmarks performance when one modality is completely missing (Graceful Degradation).
 
+To generate the class distributions and visual sample images for the additional benchmark datasets (Dataset 2 and 3), run:
+
+```bash
+python3 generate_dataset_distribution.py
+```
+
+This generates the following files in the `results/` directory:
+
+1. **`dataset2_distribution.png`**: Bar plot of Dataset 2 class distribution.
+2. **`dataset2_samples.png`**: Sample images for Dataset 2 (Normal vs TB).
+3. **`dataset3_distribution.png`**: Bar plot of Dataset 3 class distribution.
+4. **`dataset3_samples.png`**: Sample images for Dataset 3 (Normal vs Tuberculosis).
+
 **Output:** Each training run creates `checkpoints/{model}_{timestamp}/` with plots (accuracy, loss, confusion matrix), checkpoints, and test results.
 
 ## 📂 Project Structure

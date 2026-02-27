@@ -147,6 +147,67 @@ EXPERIMENTS = {
     },
 
     # -------------------------------------------------------
+    # Dataset 3 Comparative Analysis (CXR-only)
+    # -------------------------------------------------------
+    'dataset3_comparison': {
+        'densenet121_ds3': {
+            'model_type': 'cnn_unimodal',
+            'backbone': 'densenet121',
+            'data_root': 'data/TB_Chest_Radiography_Database',
+            'is_unimodal': True,
+            'modality': 'cxr',
+            'description': 'DenseNet121 Dataset 3 Comparison'
+        },
+        'resnet_50_ds3': {
+            'model_type': 'cnn_unimodal',
+            'backbone': 'resnet50',
+            'data_root': 'data/TB_Chest_Radiography_Database',
+            'is_unimodal': True,
+            'modality': 'cxr',
+            'description': 'ResNet-50 Dataset 3 Comparison'
+        },
+        'efficientnet_v2_s_ds3': {
+            'model_type': 'cnn_unimodal',
+            'backbone': 'efficientnet_v2_s',
+            'data_root': 'data/TB_Chest_Radiography_Database',
+            'is_unimodal': True,
+            'modality': 'cxr',
+            'description': 'EfficientNetV2-S Dataset 3 Comparison'
+        },
+        'vit_tiny_ds3': {
+            'model_type': 'transformer_unimodal',
+            'backbone': 'vit_tiny',
+            'data_root': 'data/TB_Chest_Radiography_Database',
+            'is_unimodal': True,
+            'modality': 'cxr',
+            'description': 'ViT-Tiny Dataset 3 Comparison'
+        },
+        'swin_tiny_ds3': {
+            'model_type': 'transformer_unimodal',
+            'backbone': 'swin_tiny',
+            'data_root': 'data/TB_Chest_Radiography_Database',
+            'is_unimodal': True,
+            'modality': 'cxr',
+            'description': 'Swin-Tiny Dataset 3 Comparison'
+        },
+        'cvt_tiny_ds3': {
+            'model_type': 'transformer_unimodal',
+            'backbone': 'cvt_tiny',
+            'data_root': 'data/TB_Chest_Radiography_Database',
+            'is_unimodal': True,
+            'modality': 'cxr',
+            'description': 'CvT-Tiny Dataset 3 Comparison'
+        },
+        'mgm_tb_net_dataset3': {
+            'model_type': 'mgm_tb_net',
+            'data_root': 'data/TB_Chest_Radiography_Database',
+            'is_unimodal': True,
+            'modality': 'both',
+            'description': 'MGM-TB-Net Dataset 3 Comparison (Sputum=0)'
+        }
+    },
+
+    # -------------------------------------------------------
     # Ablation Studies
     # -------------------------------------------------------
     # Ablation A: FIS variants

@@ -267,6 +267,8 @@ def train(config):
         dataset_name = 'dataset1'
     elif 'Dataset of Tuberculosis' in data_root:
         dataset_name = 'dataset2'
+    elif 'TB_Chest_Radiography_Database' in data_root:
+        dataset_name = 'dataset3'
     else:
         dataset_name = Path(data_root).name
 

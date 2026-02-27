@@ -2,6 +2,8 @@
 # *.txt
 *.log
 data/JU-LDD-task-b
+data/Dataset of Tuberculosis Chest X-rays Images
+data/TB_Chest_Radiography_Database
 env
 checkpoints
 results
