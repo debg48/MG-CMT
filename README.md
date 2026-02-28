@@ -1,39 +1,54 @@
-# MGM-TB-Net: Mamdani-Gated Multimodal Transformer for Tuberculosis Detection
+<div align="center">
 
-**Author:** Debgandhar Ghosh  
-**Date:** January 2026  
-**Optimized for:** Apple M4 Air (MPS Backend)
+# MGM-TB-Net: Mamdani-Gated Multimodal Transformer
+
+### Neuro-Fuzzy Fusion for Robust Tuberculosis Detection
+
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=flat&logo=PyTorch&logoColor=white)](https://pytorch.org/)
+[![Apple Silicon](https://img.shields.io/badge/Optimized-Apple%20M4%20Air-brightgreen?logo=apple)](https://developer.apple.com/metal/pytorch/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**Author:** [Debgandhar Ghosh](mailto:debgandhar4000@gmail.com)  
+**Date:** January 2026 | **Version:** 1.0.0
+
+</div>
 
 ---
 
-## Overview
+## 🔬 Overview
 
 **MGM-TB-Net** is a novel **Hybrid Convolutional-Transformer** architecture for robust multimodal Tuberculosis (TB) detection. It fuses **Chest X-Ray (CXR)** and **Sputum Smear Microscopy** images using a **Differentiable Mamdani Fuzzy Inference System (FIS)** that dynamically gates cross-modal attention based on estimated modality uncertainty, preventing the "Feature Wash-out" failure mode common in naive fusion strategies.
 
-This repository contains the official PyTorch implementation, all baseline experiments, ablation studies, and benchmark evaluations across three datasets.
+> [!NOTE]
+> This repository contains the official PyTorch implementation, all baseline experiments, ablation studies, and benchmark evaluations across three datasets.
 
 ---
 
-## The Problem: Feature Wash-out
+## ⚠️ The Problem: Feature Wash-out
 
 Standard multimodal fusion (concatenation, vanilla cross-attention) assumes all modalities are equally reliable. In clinical TB diagnosis:
 
 - **CXR** is the primary structural modality — reliable but sensitive to sensor/positioning quality.
 - **Sputum Microscopy** provides microbiological evidence — highly diagnostic but prone to staining artifacts, field-of-view bias, and focus noise.
 
-When sputum quality is degraded, naive fusion allows corrupted features to "wash out" the clean CXR representation, actively degrading accuracy below the unimodal baseline.
+> [!CAUTION]
+> When sputum quality is degraded, naive fusion allows corrupted features to "wash out" the clean CXR representation, actively degrading accuracy below the unimodal baseline.
 
 ---
 
-## The Solution: Neuro-Fuzzy Safety-Critical Gating
+## 💡 The Solution: Neuro-Fuzzy Safety-Critical Gating
 
 MGM-TB-Net introduces three innovations to solve this:
 
 1. **Uncertainty Estimation**: Per-modality entropy is computed from the encoder's feature distribution.
 2. **Mamdani FIS**: A differentiable fuzzy controller with learnable Gaussian membership functions translates entropy into interpretable confidence scalars (α, β).
-3. **Gated Residual Fusion (FMCA)**: The confidence scalar β gates the cross-attention *after softmax*, and a residual connection ensures graceful fallback to CXR when sputum is unreliable:
+3. **Gated Residual Fusion (FMCA)**: The confidence scalar β gates the cross-attention *after softmax*, and a residual connection ensures graceful fallback to CXR when sputum is unreliable.
 
-```
+> [!TIP]
+> When β → 0 (high sputum uncertainty), the fusion degrades gracefully to a unimodal CXR classifier via the residual path.
+
+```python
 fused = CXR_features + β × CrossAttention(CXR_queries, Sputum_keys, Sputum_values)
 ```
 
@@ -46,8 +61,8 @@ When β → 0 (high sputum uncertainty), the fusion degrades gracefully to a uni
 ### Hybrid Encoder (per modality, weight-independent)
 
 - **Convolutional Stem**: 4-stage conv stack with total stride 16, producing 196 tokens of dim 256 from 224×224 input
-- **Transformer Body**: 4 custom transformer blocks (256-dim, 8 heads) with **2D Rotary Positional Embeddings (2D-RoPE)**
-- **Global Average Pooling** → 256-dim latent vector `h`
+- **Transformer Body**: 4 custom transformer blocks (**192-dim**, 8 heads) with **2D Rotary Positional Embeddings (2D-RoPE)**
+- **Global Average Pooling** → **192-dim** latent vector `h`
 - ~5M parameters per encoder
 
 ### Differentiable Mamdani FIS
@@ -60,7 +75,7 @@ When β → 0 (high sputum uncertainty), the fusion degrades gracefully to a uni
 
 ### Fuzzy-Modulated Cross-Attention (FMCA)
 
-```
+```python
 FMCA(Q, K, V, β) = β · Softmax(QKᵀ / √d_k) · V
 ```
 
@@ -68,7 +83,7 @@ Post-softmax gating directly suppresses the magnitude of the attention update ve
 
 ### Training Objective
 
-```
+```python
 L_total = L_CE(ŷ, y) + λ · L_aux(U_cxr, U_spt)
 ```
 
@@ -78,7 +93,7 @@ L_total = L_CE(ŷ, y) + λ · L_aux(U_cxr, U_spt)
 
 ---
 
-## Datasets
+## 📊 Datasets
 
 | # | Dataset | Task | Modalities |
 | :---: | :--- | :--- | :--- |
@@ -91,7 +106,7 @@ L_total = L_CE(ŷ, y) + λ · L_aux(U_cxr, U_spt)
 
 ---
 
-## Installation
+## 🛠️ Installation
 
 ```bash
 git clone https://github.com/debg48/mgm-tb-former.git
@@ -108,9 +123,9 @@ pip install -r requirements.txt
 
 ---
 
-## Project Structure
+## 📂 Project Structure
 
-```
+```text
 .
 ├── models/
 │   ├── encoders.py           # Custom 4-layer ViT with 2D-RoPE
@@ -136,20 +151,20 @@ pip install -r requirements.txt
 
 ---
 
-## Running Experiments
+## 🚀 Running Experiments
 
 ### Hyperparameters (identical across all models for fair comparison)
 
 | Hyperparameter | Value |
 | :--- | :---: |
 | Image Size | 224 × 224 |
-| Embedding Dim | 256 |
+| Embedding Dim | **192** |
 | Transformer Layers | 4 |
 | Attention Heads | 8 |
 | Epochs | 30 |
 | Batch Size | 4 |
-| Learning Rate | 1e-4 |
-| Optimizer | AdamW (wd=0.01) |
+| Learning Rate | **3e-4** |
+| Optimizer | AdamW (wd=**0.15**) |
 | Scheduler | CosineAnnealingLR |
 
 Only `model_type`, `modality`, and `gate_type` differ between experiments.
@@ -211,7 +226,7 @@ python3 run_experiments.py --experiment levit_tiny_ds3 --epochs 30
 python3 run_experiments.py --experiment mgm_tb_net_dataset3 --epochs 30
 ```
 
-### Robustness & Missing Modality Analysis
+### 🔬 Robustness & Missing Modality Analysis
 
 ```bash
 python3 analyze_robustness.py
@@ -222,7 +237,7 @@ Generates in `results/`:
 - `failure_case_viz.png` — Noisy CXR + Clean Sputum sensor failure simulation
 - `missing_modality.png` — Graceful degradation under complete modality dropout
 
-### Dataset Distribution & Sample Visualization
+### 📦 Dataset Distribution & Sample Visualization
 
 ```bash
 python3 generate_dataset_distribution.py
@@ -233,7 +248,7 @@ Generates in `results/`:
 - `dataset2_distribution.png`, `dataset2_samples.png`
 - `dataset3_distribution.png`, `dataset3_samples.png`
 
-### Utility Commands
+### 🛠️ Utility Commands
 
 ```bash
 # List all registered experiments
@@ -248,11 +263,11 @@ tensorboard --logdir checkpoints
 
 ---
 
-## Training Output
+## 📦 Training Output
 
 Each run creates a timestamped checkpoint directory:
 
-```
+```text
 checkpoints/{model}_{timestamp}/
 ├── plots/
 │   ├── loss_curve.png
@@ -269,7 +284,7 @@ checkpoints/{model}_{timestamp}/
 
 ---
 
-## Experimental Results
+## 📈 Experimental Results
 
 ### Main Comparison — Dataset 1 (JU-LDD-task-b, Multimodal)
 
@@ -296,7 +311,7 @@ checkpoints/{model}_{timestamp}/
 
 The residual connection accounts for ~32% of the F1 gain. The fuzzy gate adds a further +2% with the critical benefit of **clinical interpretability**.
 
-### Robustness
+### 🔬 Robustness
 
 | Failure Scenario | Accuracy |
 | :--- | :---: |
@@ -306,13 +321,13 @@ The residual connection accounts for ~32% of the F1 gain. The fuzzy gate adds a 
 
 Noise stability indicates **feature invariance** in the convolutional stem — the encoder filters high-frequency noise before the transformer body.
 
-### Dataset 2 & 3 Comparative Benchmarks (CXR-only)
+### 📈 Dataset 2 & 3 Comparative Benchmarks (CXR-only)
 
 Results to be populated after completing 30-epoch training runs for each model.
 
 ---
 
-## Model Size Comparison
+## 📏 Model Size Comparison
 
 | Model | Parameters | FLOPs | Notes |
 | :--- | ---: | ---: | :--- |
@@ -322,7 +337,7 @@ Results to be populated after completing 30-epoch training runs for each model.
 
 ---
 
-## Performance Notes (Apple M4 Air)
+## ⚡ Performance Notes (Apple M4 Air)
 
 - Recommended batch size: 4–8 (for 16GB RAM)
 - Expected speed: ~30 min/epoch on ~1000 training images
@@ -330,7 +345,7 @@ Results to be populated after completing 30-epoch training runs for each model.
 
 ---
 
-## Citation
+## 📝 Citation
 
 ```bibtex
 @article{ghosh2026mgmtbnet,
@@ -342,6 +357,6 @@ Results to be populated after completing 30-epoch training runs for each model.
 
 ---
 
-## Contact
+## 📧 Contact
 
-For questions or collaborations: [debgandhar4000@gmail.com]
+[debgandhar4000@gmail.com](mailto:debgandhar4000@gmail.com)
