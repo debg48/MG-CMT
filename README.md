@@ -1,378 +1,347 @@
-# MGM-TB-Net: Mamdani-Gated Multimodal Transformer
+# MGM-TB-Net: Mamdani-Gated Multimodal Transformer for Tuberculosis Detection
 
 **Author:** Debgandhar Ghosh  
 **Date:** January 2026  
 **Optimized for:** Apple M4 Air (MPS Backend)
 
-## 🔬 Overview
+---
 
-**MGM-TB-Net** is a novel **Hybrid Convolutional-Transformer** architecture designed for robust multimodal medical image analysis. It specifically targets the challenge of fusing **Chest X-Rays (CXR)** (high structural consistency) with **Sputum Smear Microscopy** (high diagnostic value but high noise/variance) for the automated detection of Tuberculosis.
+## Overview
 
-This model leverages a **Convolutional Stem** for local feature extraction and a **Vision Transformer Body** for global context, modulated by a **Fuzzy Inference System** to handle uncertainty.
+**MGM-TB-Net** is a novel **Hybrid Convolutional-Transformer** architecture for robust multimodal Tuberculosis (TB) detection. It fuses **Chest X-Ray (CXR)** and **Sputum Smear Microscopy** images using a **Differentiable Mamdani Fuzzy Inference System (FIS)** that dynamically gates cross-modal attention based on estimated modality uncertainty, preventing the "Feature Wash-out" failure mode common in naive fusion strategies.
 
-This repository contains the official PyTorch implementation of MGM-TB-Net.
+This repository contains the official PyTorch implementation, all baseline experiments, ablation studies, and benchmark evaluations across three datasets.
 
-## 🧠 The Problem: "Feature Wash-out"
+---
 
-Traditional multimodal fusion strategies (concatenation, element-wise addition, or vanilla cross-attention) often fail when one modality is significantly noisier or less reliable than the other. In the context of TB diagnosis:
+## The Problem: Feature Wash-out
 
-- **CXR** provides a reliable structural baseline.
-- **Sputum Microscopy** is highly specific but prone to artifacts, staining errors, and field-of-view variability.
+Standard multimodal fusion (concatenation, vanilla cross-attention) assumes all modalities are equally reliable. In clinical TB diagnosis:
 
-Naive fusion allows the noise from poor-quality sputum slides to corrupt (or "wash out") the clean features from the CXR, degrading overall model performance.
+- **CXR** is the primary structural modality — reliable but sensitive to sensor/positioning quality.
+- **Sputum Microscopy** provides microbiological evidence — highly diagnostic but prone to staining artifacts, field-of-view bias, and focus noise.
 
-## 💡 The Solution: Neuro-Fuzzy Gating
+When sputum quality is degraded, naive fusion allows corrupted features to "wash out" the clean CXR representation, actively degrading accuracy below the unimodal baseline.
 
-MGM-TB-Net introduces a **Differentiable Mamdani Fuzzy Inference System (FIS)** that acts as a cognitive gatekeeper. Instead of blindly trusting all inputs, the model:
+---
 
-1. **Measures Uncertainty**: Calculates entropy from each modality's preliminary predictions.
-2. **Applies Fuzzy Logic**: Uses human-interpretable rules (e.g., *"If Sputum is Uncertain, reduce its influence"*).
-3. **Modulates Attention**: Dynamically scales the cross-attention weights, effectively "gating" the flow of information.
+## The Solution: Neuro-Fuzzy Safety-Critical Gating
 
-## 🏗️ Architecture
+MGM-TB-Net introduces three innovations to solve this:
 
-The model consists of three core components:
+1. **Uncertainty Estimation**: Per-modality entropy is computed from the encoder's feature distribution.
+2. **Mamdani FIS**: A differentiable fuzzy controller with learnable Gaussian membership functions translates entropy into interpretable confidence scalars (α, β).
+3. **Gated Residual Fusion (FMCA)**: The confidence scalar β gates the cross-attention *after softmax*, and a residual connection ensures graceful fallback to CXR when sputum is unreliable:
 
-### 1. Custom Lightweight Vision Transformer with 2D-RoPE
-
-Instead of using pretrained ViT (86M parameters, prone to overfitting on small datasets), we implement a **custom 4-layer transformer** optimized for medical imaging:
-
-- **4 transformer layers** (vs 12 in ViT-Base)
-- **256-dim embeddings** (vs 768)
-- **8 attention heads**
-- **~5M parameters per encoder**
-- **2D-Rotary Positional Embeddings (2D-RoPE)** for capturing relative spatial relationships (e.g., "infiltrate is *above* the clavicle")
-
-**Key Innovation:** 2D-RoPE extends rotary embeddings to 2D, allowing the model to understand spatial context critical for medical imaging.
-
-### 2. Differentiable Mamdani FIS
-
-A learnable fuzzy controller that serves as the fusion brain:
-
-- **Input**: Uncertainty metrics ($\mathcal{U}_{cxr}, \mathcal{U}_{spt}$) computed via entropy
-- **Fuzzification**: Learnable Gaussian membership functions map uncertainty to fuzzy sets (Low, Medium, High)
-- **Inference**: Computes firing strengths of 9 fuzzy rules (3×3 combinations)
-- **Defuzzification**: Outputs scalars $\alpha$ (CXR confidence) and $\beta$ (Sputum confidence)
-- **Training**: Trained end-to-end with an **Entropy Regularization Loss** to force the model to learn diverse uncertainty estimates, preventing the FIS from collapsing to a static "sweet spot."
-
-**All operations are differentiable**, enabling end-to-end training.
-
-### 3. Fuzzy-Modulated Cross-Attention (FMCA) with Gated Residual Fusion
-
-We redefine the standard Attention mechanism to accept the fuzzy scalars with a **critical residual connection**:
-
-```python
-fused = CXR_features + β × CrossAttention(CXR_queries, Sputum_keys)
+```
+fused = CXR_features + β × CrossAttention(CXR_queries, Sputum_keys, Sputum_values)
 ```
 
-**Post-Softmax Gating:**
-$$
-\text{FMCA}(Q, K, V) = \beta \cdot \text{Softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
-$$
+When β → 0 (high sputum uncertainty), the fusion degrades gracefully to a unimodal CXR classifier.
 
-**Why This Design?**
+---
 
-- **Residual Path:** If the FIS detects high uncertainty in Sputum ($\beta \to 0$), the cross-attention output is suppressed, but the model **falls back to clean CXR features** via the residual connection. Without this, $\beta \to 0$ would result in zero features!
-- **Post-Softmax Scaling:** We apply $\beta$ **after softmax** to directly scale the magnitude of the attended features. Pre-softmax scaling would only flatten the distribution toward uniformity, not shut it off.
+## Architecture
 
-## 🛠️ Installation
+### Hybrid Encoder (per modality, weight-independent)
 
-### For Apple M4 Air (MPS Backend)
+- **Convolutional Stem**: 4-stage conv stack with total stride 16, producing 196 tokens of dim 256 from 224×224 input
+- **Transformer Body**: 4 custom transformer blocks (256-dim, 8 heads) with **2D Rotary Positional Embeddings (2D-RoPE)**
+- **Global Average Pooling** → 256-dim latent vector `h`
+- ~5M parameters per encoder
+
+### Differentiable Mamdani FIS
+
+- **Inputs**: Uncertainty scalars U_cxr, U_spt (computed via feature entropy)
+- **Fuzzification**: 3 learnable Gaussian membership functions per input (Low / Medium / High)
+- **Rule Base**: 3×3 = 9 fuzzy rules, initialized with logic priors (e.g., "IF Sputum_Uncertainty IS High → Trust IS Low")
+- **Defuzzification**: Weighted-average Center-of-Gravity → confidence scalars α (CXR), β (Sputum)
+- **Entropy Regularization Loss**: L_aux = −Var(U) prevents the uncertainty head from collapsing to a constant
+
+### Fuzzy-Modulated Cross-Attention (FMCA)
+
+```
+FMCA(Q, K, V, β) = β · Softmax(QKᵀ / √d_k) · V
+```
+
+Post-softmax gating directly suppresses the magnitude of the attention update vector (not just flattens the distribution). Combined with the residual connection, this provides both noise suppression and safe fallback.
+
+### Training Objective
+
+```
+L_total = L_CE(ŷ, y) + λ · L_aux(U_cxr, U_spt)
+```
+
+λ = 0.1 empirically. L_aux = −(Var(U_cxr) + Var(U_spt)).
+
+**Total model size: ~10.5M parameters** (vs 86M for ViT-Base multimodal).
+
+---
+
+## Datasets
+
+| # | Dataset | Task | Modalities |
+| :---: | :--- | :--- | :--- |
+| 1 | **JU-LDD-task-b** | TB detection (multimodal) | CXR + Sputum Microscopy |
+| 2 | **TB Chest Radiography Database** | TB vs Normal (CXR-only) | CXR |
+| 3 | **Dataset of Tuberculosis Chest X-ray Images** | TB vs Normal (CXR-only) | CXR |
+
+- **Dataset 1** is the primary dataset for the full multimodal MGM-TB-Net evaluation.
+- **Datasets 2 & 3** are used for CXR-only comparative benchmarks against standard CNN and Transformer baselines.
+
+---
+
+## Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/debg48/mgm-tb-former.git
 cd mgm-tb-former
 
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv env
+source env/bin/activate
 
-# Install dependencies
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-**System Requirements:**
+**Requirements:** macOS 13.0+ (MPS), Python 3.9+, 16GB RAM recommended.
 
-- macOS 13.0+ (for MPS support)
-- Python 3.9+
-- 16GB RAM recommended
+---
 
-## 🚀 Usage
+## Project Structure
 
-### Quick Start
-
-```bash
-# 1. Set up environment (first time only)
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# 2. Train MGM-TB-Net
-python3 train.py --config configs/mgm_tb_net.yaml
+```
+.
+├── models/
+│   ├── encoders.py           # Custom 4-layer ViT with 2D-RoPE
+│   ├── fis.py                # Differentiable Mamdani FIS
+│   ├── fusion.py             # FMCA (post-softmax gating)
+│   └── mgm_tb_net.py         # Full MGM-TB-Net architecture
+├── baselines/
+│   ├── cnn_baselines.py      # ResNet-50, EfficientNet-B0, MobileNetV2, DenseNet-121, EfficientNet-V2-S
+│   └── transformer_baselines.py  # ViT-Tiny, Swin-Tiny, LeViT-128s
+├── data/
+│   ├── dataset.py            # Dataset loaders for all 3 datasets
+│   ├── JU-LDD-task-b/        # Dataset 1 (CXR + Sputum pairs)
+│   ├── TB_Chest_Radiography_Database/   # Dataset 2
+│   └── Dataset of Tuberculosis Chest X-rays Images/  # Dataset 3
+├── configs/                  # YAML hyperparameter configs per experiment
+├── utils/                    # Metrics, visualization, statistical tests
+├── results/                  # Generated plots, paper draft, results
+├── train.py                  # Training entry point
+├── run_experiments.py        # Batch experiment runner
+├── analyze_robustness.py     # Robustness & missing-modality analysis
+└── generate_dataset_distribution.py   # Dataset EDA plots
 ```
 
-### Train Individual Models
+---
+
+## Running Experiments
+
+### Hyperparameters (identical across all models for fair comparison)
+
+| Hyperparameter | Value |
+| :--- | :---: |
+| Image Size | 224 × 224 |
+| Embedding Dim | 256 |
+| Transformer Layers | 4 |
+| Attention Heads | 8 |
+| Epochs | 30 |
+| Batch Size | 4 |
+| Learning Rate | 1e-4 |
+| Optimizer | AdamW (wd=0.01) |
+| Scheduler | CosineAnnealingLR |
+
+Only `model_type`, `modality`, and `gate_type` differ between experiments.
+
+### Tier 1: Core Fusion Baselines (Dataset 1 — Multimodal)
 
 ```bash
-# Your model
-python3 train.py --config configs/mgm_tb_net.yaml
-
-# Baselines
-python3 train.py --config configs/cxr_only.yaml
-python3 train.py --config configs/sputum_only.yaml
-python3 train.py --config configs/concat_fusion.yaml
-python3 train.py --config configs/vanilla_cmt.yaml
-python3 train.py --config configs/scalar_gate_mlp.yaml
+python3 run_experiments.py --experiment cxr_only --epochs 30
+python3 run_experiments.py --experiment sputum_only --epochs 30
+python3 run_experiments.py --experiment concat_fusion --epochs 30
+python3 run_experiments.py --experiment vanilla_cmt --epochs 30
+python3 run_experiments.py --experiment scalar_gate_mlp --epochs 30
+python3 run_experiments.py --experiment scalar_gate_sigmoid --epochs 30
 ```
 
-### Override Settings
+### Tier 2: CNN Baselines + Proposed Model (Dataset 1 — Multimodal)
 
 ```bash
-python3 train.py --config configs/mgm_tb_net.yaml --epochs 100 --batch_size 8
+python3 run_experiments.py --experiment mgm_tb_net --epochs 30
+python3 run_experiments.py --experiment resnet_fusion --epochs 30
+python3 run_experiments.py --experiment efficientnet_fusion --epochs 30
+python3 run_experiments.py --experiment mobilenet_fusion --epochs 30
 ```
 
-### Monitor Training
+### Tier 3: Ablation Studies (Dataset 1)
 
 ```bash
-tensorboard --logdir checkpoints
-# Open http://localhost:6006
+# FIS gate variants (Why Fuzzy over MLP/Sigmoid?)
+python3 run_experiments.py --experiment mgm_tb_net_no_gate --epochs 30
+python3 run_experiments.py --experiment mgm_tb_net_mlp_gate --epochs 30
+python3 run_experiments.py --experiment mgm_tb_net_sigmoid_gate --epochs 30
+
+# FMCA attention scaling variants (Why post-softmax?)
+python3 run_experiments.py --experiment fmca_standard --epochs 30
+python3 run_experiments.py --experiment fmca_post_scale --epochs 30
 ```
 
-## 📊 Analysis & Visualization
+### Dataset 2 Comparative Benchmark (CXR-only)
 
-After training the model, run the analysis script to generate "High Gain" paper figures:
+```bash
+python3 run_experiments.py --experiment densenet121 --epochs 30
+python3 run_experiments.py --experiment resnet_50 --epochs 30
+python3 run_experiments.py --experiment efficientnet_v2_s --epochs 30
+python3 run_experiments.py --experiment vit_tiny --epochs 30
+python3 run_experiments.py --experiment swin_tiny --epochs 30
+python3 run_experiments.py --experiment levit_tiny --epochs 30
+python3 run_experiments.py --experiment mgm_tb_net_dataset2 --epochs 30
+```
+
+### Dataset 3 Comparative Benchmark (CXR-only)
+
+```bash
+python3 run_experiments.py --experiment densenet121_ds3 --epochs 30
+python3 run_experiments.py --experiment resnet_50_ds3 --epochs 30
+python3 run_experiments.py --experiment efficientnet_v2_s_ds3 --epochs 30
+python3 run_experiments.py --experiment vit_tiny_ds3 --epochs 30
+python3 run_experiments.py --experiment swin_tiny_ds3 --epochs 30
+python3 run_experiments.py --experiment levit_tiny_ds3 --epochs 30
+python3 run_experiments.py --experiment mgm_tb_net_dataset3 --epochs 30
+```
+
+### Robustness & Missing Modality Analysis
 
 ```bash
 python3 analyze_robustness.py
 ```
 
-This will generate the following plots in the `results/` directory:
+Generates in `results/`:
 
-1. **`failure_case_viz.png`**: Visualizes how the model handles sensor failure (Noisy CXR + Clean Sputum).
-2. **`missing_modality.png`**: Benchmarks performance when one modality is completely missing (Graceful Degradation).
+- `failure_case_viz.png` — Noisy CXR + Clean Sputum sensor failure simulation
+- `missing_modality.png` — Graceful degradation under complete modality dropout
 
-To generate the class distributions and visual sample images for the additional benchmark datasets (Dataset 2 and 3), run:
+### Dataset Distribution & Sample Visualization
 
 ```bash
 python3 generate_dataset_distribution.py
 ```
 
-This generates the following files in the `results/` directory:
+Generates in `results/`:
 
-1. **`dataset2_distribution.png`**: Bar plot of Dataset 2 class distribution.
-2. **`dataset2_samples.png`**: Sample images for Dataset 2 (Normal vs TB).
-3. **`dataset3_distribution.png`**: Bar plot of Dataset 3 class distribution.
-4. **`dataset3_samples.png`**: Sample images for Dataset 3 (Normal vs Tuberculosis).
+- `dataset2_distribution.png`, `dataset2_samples.png`
+- `dataset3_distribution.png`, `dataset3_samples.png`
 
-**Output:** Each training run creates `checkpoints/{model}_{timestamp}/` with plots (accuracy, loss, confusion matrix), checkpoints, and test results.
+### Utility Commands
 
-## 📂 Project Structure
+```bash
+# List all registered experiments
+python3 run_experiments.py --list
 
-```
-.
-├── models/
-│   ├── encoders.py     # Custom 4-layer ViT with 2D-RoPE
-│   ├── fis.py          # Differentiable Mamdani FIS
-│   ├── fusion.py       # FMCA Layer (logit & post-softmax variants)
-│   └── mgm_tb_net.py   # Complete MGM-TB-Net architecture
-├── baselines/          # Baseline fusion methods (CNN Backbones: ResNet, DenseNet, EfficientNet; Transformer Backbones: ViT, Swin, CvT)
-├── data/               # Dataset loaders
-│   └── JU-LDD-task-b/  # TB detection dataset
-├── experiments/        # Training & evaluation scripts
-├── configs/            # Hyperparameter configuration
-│   └── mgm_tb_net.yaml
-├── utils/              # Metrics, visualization, statistical tests
-├── scripts/            # Experiment runners, plotting
-└── requirements.txt    # Python dependencies
+# Dry run (validates config without training)
+python3 run_experiments.py --suite tier1 --dry_run
+
+# TensorBoard monitoring
+tensorboard --logdir checkpoints
 ```
 
-## 🔑 Key Features
+---
 
-- **Lightweight**: 10.5M total parameters (vs 86M for standard ViT-based multimodal models)
-- **Interpretable**: Fuzzy membership functions are visualizable and human-understandable
-- **Robust**: Gracefully handles noisy/missing modalities via dynamic gating
-- **Efficient**: Optimized for M4 Air MPS backend (~30 min/epoch on single GPU)
-- **End-to-end trainable**: All components (including FIS) learn from data
+## Training Output
 
-## 📊 Model Size Comparison
-
-| Model | Params | FLOPs | Memory |
-|:---|---:|---:|---:|
-| ViT-Base (pretrained) | 86M | 17.6G | 12GB |
-| ViT-Small | 22M | 4.6G | 6GB |
-| **MGM-TB-Net (Ours)** | **10.5M** | **2.1G** | **4GB** |
-
-## 📝 Citation
-
-If you use this code in your research, please cite:
-
-```bibtex
-
-```
-
-## 📧 Contact
-
-For questions or collaborations, please reach out to [your.email@university.edu]
-
-## 🎯 Experimental Setup
-
-### Fair Benchmarking
-
-All models use **IDENTICAL** hyperparameters to ensure fair comparison:
-
-- **Architecture**: 4 layers, 256-dim embeddings, 8 attention heads
-- **Training**: 50 epochs, batch size 4, learning rate 1e-4
-- **Optimizer**: AdamW with weight decay 0.01
-- **Scheduler**: CosineAnnealingLR
-- **Data Augmentation**: Strict augmentation. **CXR:** Rotations/Color Jitter (No flips to preserve anatomy). **Sputum:** Random Flips & Noise ($\sigma=0.3$) for robustness.
-
-Only model-specific parameters differ (e.g., `model_type`, `modality`, `gate_type`).
-
-### Training Output
-
-Each experiment creates a timestamped directory with:
+Each run creates a timestamped checkpoint directory:
 
 ```
 checkpoints/{model}_{timestamp}/
 ├── plots/
-│   ├── loss_curve.png              # Training/validation loss
-│   ├── accuracy_curve.png          # Training/validation accuracy
-│   ├── f1_curve.png                # Training/validation F1-score
-│   ├── all_metrics.png             # Combined metrics plot
-│   └── confusion_matrix_test.png   # Test set confusion matrix
-├── checkpoint_best.pth             # Best model (highest val F1)
-├── checkpoint_latest.pth           # Latest epoch
-├── config.yaml                     # Training configuration
-├── test_results.yaml               # Final test metrics
-└── logs/                           # TensorBoard logs
+│   ├── loss_curve.png
+│   ├── accuracy_curve.png
+│   ├── f1_curve.png
+│   ├── all_metrics.png
+│   └── confusion_matrix_test.png
+├── checkpoint_best.pth
+├── checkpoint_latest.pth
+├── config.yaml
+├── test_results.yaml
+└── logs/                    # TensorBoard logs
 ```
 
-### Run Multiple Experiments
+---
 
-Use the experiment runner for batch execution:
+## Experimental Results
 
-```bash
-# List all available experiments
-python3 run_experiments.py --list
-
-# Run Tier 1 (7 baselines + MGM-TB-Net)
-python3 run_experiments.py --suite tier1 --epochs 50
-
-# Run ablation studies
-python3 run_experiments.py --suite ablation_fis
-python3 run_experiments.py --suite ablation_fmca
-
-# Run Dataset 2 Comparative Analysis
-python3 run_experiments.py --suite dataset2_comparison
-
-# Run specific experiment
-python3 run_experiments.py --experiment mgm_tb_net
-
-# Dry run (test without training)
-python3 run_experiments.py --suite tier1 --dry_run
-```
-
-## 📊 Experimental Results
-
-### Main Performance Comparison
-
-We evaluated MGM-TB-Net against unimodal baselines, naive fusion methods, and state-of-the-art multimodal approaches on the JU-LDD-task-b test set.
+### Main Comparison — Dataset 1 (JU-LDD-task-b, Multimodal)
 
 | Model | Accuracy | Precision | Recall | F1-Score | AUC-ROC | Notes |
-|:---|:---:|:---:|:---:|:---:|:---:|:---|
-| CXR-Only (Unimodal) | 0.9200 | 0.9565 | 0.8800 | 0.9167 | 0.9876 | Structural baseline |
-| Sputum-Only (Unimodal) | 0.7400 | 0.7308 | 0.7600 | 0.7451 | 0.7952 | Microbiological baseline |
-| Concat Fusion | 0.9300 | 1.0000 | 0.8600 | 0.9247 | 0.9756 | Late fusion |
-| Vanilla CMT | 0.5800 | 0.5588 | 0.7600 | 0.6441 | 0.5776 | Cross-attention (no gating) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| CXR-Only | 0.9200 | 0.9565 | 0.8800 | 0.9167 | 0.9876 | Unimodal baseline |
+| Sputum-Only | 0.7400 | 0.7308 | 0.7600 | 0.7451 | 0.7952 | Unimodal baseline |
+| Concat Fusion | 0.9300 | 1.0000 | 0.8600 | 0.9247 | 0.9756 | Naive late fusion |
+| Vanilla CMT | 0.5800 | 0.5588 | 0.7600 | 0.6441 | 0.5776 | Cross-attention, no gating |
 | Scalar Gate (MLP) | 0.6100 | 0.5902 | 0.7200 | 0.6486 | 0.6756 | Black-box gating |
 | Scalar Gate (Sigmoid) | 0.5500 | 0.5510 | 0.5400 | 0.5455 | 0.5504 | Simple gating |
-| ResNet-50 Fusion | 0.9600 | 0.9792 | 0.9400 | 0.9592 | 0.9964 | CNN baseline |
-| EfficientNet-B0 Fusion | 0.9100 | 0.9767 | 0.8400 | 0.9032 | 0.9288 | CNN baseline |
-| MobileNetV2 Fusion | 0.6300 | 0.6102 | 0.7200 | 0.6606 | 0.6760 | CNN baseline |
-| **MGM-TB-Net (Ours)** | **0.9900** | **1.0000** | **0.9800** | **0.9899** | **0.9976** | **Fuzzy gating + Residual** |
+| ResNet-50 Fusion | 0.9600 | 0.9792 | 0.9400 | 0.9592 | 0.9964 | CNN multimodal |
+| EfficientNet-B0 Fusion | 0.9100 | 0.9767 | 0.8400 | 0.9032 | 0.9288 | CNN multimodal |
+| MobileNetV2 Fusion | 0.6300 | 0.6102 | 0.7200 | 0.6606 | 0.6760 | CNN multimodal |
+| **MGM-TB-Net (Ours)** | **0.9900** | **1.0000** | **0.9800** | **0.9899** | **0.9976** | Fuzzy gating + Residual |
 
-### 🔑 Key Finding: The Critical Role of Residual Connections
+### Ablation — Critical Role of Residual Connection
 
-Our ablation studies revealed a **critical architectural insight**: the residual connection is the dominant factor in MGM-TB-Net's superior performance.
+| Configuration | Residual | F1-Score | Δ vs Full Model |
+| :--- | :---: | :---: | :---: |
+| Vanilla CMT | ❌ | 0.6441 | −0.3458 |
+| MGM-TB-Net w/o Fuzzy Gate | ✅ | 0.9697 | −0.0202 |
+| **MGM-TB-Net (Full)** | ✅ | **0.9899** | — |
 
-| Experiment | Model | Residual? | F1-Score | Δ from MGM-TB-Net |
-|:---|:---|:---:|:---:|:---:|
-| Tier 1 Baseline | Vanilla CMT | ❌ No | 0.6441 | -0.3458 |
-| Tier 1 Baseline | Scalar Gate (MLP) | ❌ No | 0.6486 | -0.3413 |
-| **Ablation Study** | MGM-TB-Net w/o Fuzzy Gate | ✅ Yes | **0.9697** | **-0.0202** |
-| **Full Model** | MGM-TB-Net | ✅ Yes | **0.9899** | — |
+The residual connection accounts for ~32% of the F1 gain. The fuzzy gate adds a further +2% with the critical benefit of **clinical interpretability**.
 
-**What This Tells Us:**
+### Robustness
 
-1. **Without Residual Connection**: Cross-attention models (Vanilla CMT, Scalar Gate) perform **catastrophically** (F1 ≈ 0.55-0.65), worse than even simple concatenation (F1 = 0.9247).
+| Failure Scenario | Accuracy |
+| :--- | :---: |
+| Missing Sputum (zeroed) | 99.00% |
+| Missing CXR (zeroed) | ~50% (random guess) |
+| Gaussian Noise on CXR (σ=0.1–1.0) | Stable (α_cxr ≈ 0.53 across all σ) |
 
-2. **With Residual Connection**: Even without fuzzy gating, the model achieves F1 = 0.9697 (+32% improvement!).
+Noise stability indicates **feature invariance** in the convolutional stem — the encoder filters high-frequency noise before the transformer body.
 
-3. **The Fuzzy Gate's Contribution**: The Mamdani FIS provides an additional +2% F1 improvement (0.9697 → 0.9899).
+### Dataset 2 & 3 Comparative Benchmarks (CXR-only)
 
-**Interpretation for the Paper:**
+Results to be populated after completing 30-epoch training runs for each model.
 
-> *"Our ablation studies reveal that the residual connection is the primary architectural innovation enabling robust multimodal fusion on this dataset. The residual path allows the model to 'fall back' to reliable CXR features when cross-attention produces corrupted representations. The fuzzy gating mechanism provides incremental accuracy improvement (+2% F1) but, more critically, offers **interpretability** that is essential for clinical deployment."*
+---
 
-### 🧠 Why Fuzzy Logic Matters: Explainability
+## Model Size Comparison
 
-While the quantitative improvement from FIS is modest (+2% F1), the **primary contribution is interpretability**. This is crucial for clinical AI deployment:
+| Model | Parameters | FLOPs | Notes |
+| :--- | ---: | ---: | :--- |
+| ViT-Base | 86M | 17.6G | Standard pretrained |
+| ViT-Small | 22M | 4.6G | |
+| **MGM-TB-Net** | **10.5M** | **2.1G** | Custom lightweight |
 
-#### Black-Box Gate (MLP/Sigmoid)
+---
 
+## Performance Notes (Apple M4 Air)
+
+- Recommended batch size: 4–8 (for 16GB RAM)
+- Expected speed: ~30 min/epoch on ~1000 training images
+- MPS backend handles fp32 efficiently; mixed precision not required
+
+---
+
+## Citation
+
+```bibtex
+@article{ghosh2026mgmtbnet,
+  title={MGM-TB-Net: Mamdani-Gated Multimodal Transformer for Robust Tuberculosis Detection},
+  author={Ghosh, Debgandhar},
+  year={2026}
+}
 ```
-uncertainties → [Neural Network] → gate value (0.73)
-Why 0.73? Unknown. The weights are opaque.
-```
 
-#### Fuzzy Gate (Interpretable)
+---
 
-```
-uncertainty_cxr = 0.15 (LOW)    → "CXR is reliable"
-uncertainty_sputum = 0.82 (HIGH) → "Sputum is unreliable"
+## Contact
 
-Rule Fired: IF cxr_uncertainty IS LOW AND sputum_uncertainty IS HIGH 
-            THEN fusion_weight IS LOW (0.25)
-
-Interpretation: "Model is trusting CXR more because sputum quality is poor"
-```
-
-**Benefits for Clinical Deployment:**
-
-1. **Clinical Trust**: Doctors can understand *why* the model weighted one modality over another for each patient. A model that says "TB detected" without explanation will not be trusted.
-
-2. **Debugging & Quality Control**: If the model fails on a case, clinicians can inspect which fuzzy rules fired and whether the membership functions are calibrated correctly. This enables targeted model improvement.
-
-3. **Regulatory Compliance**: Medical AI increasingly requires explainability (e.g., FDA guidelines, EU AI Act). Fuzzy logic provides built-in audit trails with human-readable decision rules.
-
-4. **Alert Triggering**: When the model detects high uncertainty in a modality ($\beta \to 0$), this can automatically trigger quality control alerts (e.g., "Sputum image quality too low, please re-capture").
-
-### The Feature Wash-out Phenomenon
-
-We observed a critical failure mode in standard cross-attention architectures:
-
-| Model | F1-Score | Problem |
-|:---|:---:|:---|
-| CXR-Only | 0.9167 | Strong unimodal baseline |
-| Vanilla CMT | **0.6441** | Cross-attention *hurts* performance! |
-| **MGM-TB-Net** | **0.9899** | Gated fusion *helps* |
-
-**What Happened?**
-
-1. Vanilla CMT has cross-attention that attends to *all* sputum features equally.
-2. When sputum is noisy/unreliable, these corrupted features "wash out" the clean CXR representation.
-3. The model performs *worse* than using CXR alone!
-
-**How MGM-TB-Net Solves This:**
-
-1. **Fuzzy Gating ($\beta$):** Detects high uncertainty in sputum → suppresses attention weights.
-2. **Residual Connection:** `fused = CXR_feats + β × CrossAttn(CXR, Sputum)` ensures fallback to reliable CXR features when $\beta \to 0$.
-
-## ⚡ Performance Notes for M4 Air
-
-- **Batch size**: 4-8 recommended (16GB RAM)
-- **Mixed precision**: Not required (MPS handles fp32 efficiently)
-- **Gradient checkpointing**: Optional for larger batches
-- **Expected speed**: ~30 min/epoch with 1000 training images
+For questions or collaborations: [debgandhar4000@gmail.com]
