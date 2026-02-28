@@ -129,13 +129,13 @@ EXPERIMENTS = {
             'modality': 'cxr',
             'description': 'Swin-Tiny Dataset 2 Comparison'
         },
-        'cvt_tiny': {
+        'levit_tiny': {
             'model_type': 'transformer_unimodal',
-            'backbone': 'cvt_tiny',
+            'backbone': 'levit_tiny',
             'data_root': 'data/Dataset of Tuberculosis Chest X-rays Images',
             'is_unimodal': True,
             'modality': 'cxr',
-            'description': 'CvT-Tiny Dataset 2 Comparison'
+            'description': 'LeViT-128s Dataset 2 Comparison'
         },
         'mgm_tb_net_dataset2': {
             'model_type': 'mgm_tb_net',
@@ -190,13 +190,13 @@ EXPERIMENTS = {
             'modality': 'cxr',
             'description': 'Swin-Tiny Dataset 3 Comparison'
         },
-        'cvt_tiny_ds3': {
+        'levit_tiny_ds3': {
             'model_type': 'transformer_unimodal',
-            'backbone': 'cvt_tiny',
+            'backbone': 'levit_tiny',
             'data_root': 'data/TB_Chest_Radiography_Database',
             'is_unimodal': True,
             'modality': 'cxr',
-            'description': 'CvT-Tiny Dataset 3 Comparison'
+            'description': 'LeViT-128s Dataset 3 Comparison'
         },
         'mgm_tb_net_dataset3': {
             'model_type': 'mgm_tb_net',
@@ -376,12 +376,14 @@ def main():
             'num_epochs': 30,
             'learning_rate': 0.0003,
             'weight_decay': 0.15,
-            'num_workers': 2
+            'num_workers': 0,
         }
     
     # Override with command line args
     base_config['num_epochs'] = args.epochs
     base_config['batch_size'] = args.batch_size
+
+
     
     # Run specific experiment
     if args.experiment:

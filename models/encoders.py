@@ -389,26 +389,34 @@ class TransformerEncoder(nn.Module):
         timm_names = {
             'vit_tiny': 'vit_tiny_patch16_224',
             'swin_tiny': 'swin_tiny_patch4_window7_224',
-            'cvt_tiny': 'cvt_13'
         }
-        
-        if backbone_name not in timm_names:
-            raise ValueError(f"Backbone {backbone_name} not supported. Try one of {list(timm_names.keys())}")
-            
-        # create_model with num_classes=0 returns pooled features
-        self.model = timm.create_model(
-            timm_names[backbone_name], 
-            pretrained=pretrained, 
-            num_classes=0
-        )
+
+        if backbone_name == 'levit_tiny':
+            # LeViT-128s with depth=(1,1,2) = 4 total attention blocks
+            self.model = timm.create_model(
+                'levit_128s',
+                pretrained=pretrained,
+                num_classes=0,
+                depth=(1, 1, 2)
+            )
+        else:
+            if backbone_name not in timm_names:
+                raise ValueError(f"Backbone {backbone_name} not supported. Try one of {list(timm_names.keys()) + ['levit_tiny']}")
+            self.model = timm.create_model(
+                timm_names[backbone_name],
+                pretrained=pretrained,
+                num_classes=0
+            )
+
         self.feature_dim = self.model.num_features
-        
+
         # Projection to shared embedding dim
         self.proj = nn.Sequential(
             nn.Linear(self.feature_dim, embed_dim),
             nn.LayerNorm(embed_dim),
             nn.Dropout(dropout)
         )
+
 
     def forward(self, x):
         """

@@ -436,7 +436,10 @@ def train(config):
     print(f"{'='*60}")
     print("Loading best model checkpoint...")
     
-    best_checkpoint = torch.load(save_dir / 'checkpoint_best.pth', weights_only=False)
+    best_ckpt_path = save_dir / 'checkpoint_best.pth'
+    last_ckpt_path = save_dir / 'checkpoint_last.pth'
+    ckpt_path = best_ckpt_path if best_ckpt_path.exists() else last_ckpt_path
+    best_checkpoint = torch.load(ckpt_path, weights_only=False)
     model.load_state_dict(best_checkpoint['model_state_dict'])
     print(f"[LOADED] Model from epoch {best_checkpoint['epoch']}")
     print(f"   Best validation F1: {best_checkpoint['metrics']['f1']:.4f}")
