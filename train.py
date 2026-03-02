@@ -172,8 +172,14 @@ def train_epoch(model, train_loader, criterion, optimizer, device, epoch, config
             std_spt = outputs['uncertainty_sputum'].std()
             loss_aux -= std_spt
             
+        # Monotonicity regularization for Mamdani FIS (prevents semantic collapse)
+        loss_mono = 0.0
+        lambda_mono = config.get('lambda_mono', 0.1)
+        if hasattr(model, 'fis') and hasattr(model.fis, 'monotonicity_loss'):
+            loss_mono = model.fis.monotonicity_loss()
+        
         # Add to main loss
-        total_loss = loss + lambda_aux * loss_aux
+        total_loss = loss + lambda_aux * loss_aux + lambda_mono * loss_mono
         
         total_loss.backward()
         optimizer.step()
