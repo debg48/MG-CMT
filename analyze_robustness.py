@@ -17,12 +17,12 @@ from torchvision import transforms
 from PIL import Image
 
 from data.dataset import TBMultimodalDataset, AddGaussianNoise
-from models.mgm_tb_former import MGMTBFormer
+from models.mgm_tb_net import MGMTBNet
 from baselines.transformer_baselines import ConcatFusion
 
 def load_model(checkpoint_path, config, device):
     """Load trained MG-CMT model."""
-    model = MGMTBFormer(
+    model = MGMTBNet(
         img_size=config['img_size'],
         patch_size=config['patch_size'],
         num_transformer_layers=config['num_layers'],
@@ -240,12 +240,12 @@ if __name__ == "__main__":
     # Check if checkpoint exists
     # Find actual MG-CMT checkpoints (not ablation variants like mg_cmt_no_gate, mg_cmt_sigmoid_gate)
     # Pattern: mg_cmt_YYYYMMDD_HHMMSS (exactly 8+6 digits after mg_cmt_)
-    # Pattern: mg_cmt_YYYYMMDD_HHMMSS or mgm_tb_former_YYYYMMDD_HHMMSS
-    # Find both legacy (mg_cmt_) and new (mgm_tb_former_) checkpoints
+    # Pattern: mg_cmt_YYYYMMDD_HHMMSS or mgm_tb_net_dataset1_YYYYMMDD_HHMMSS
+    # Find both legacy (mg_cmt_) and new (mgm_tb_net_dataset1_) checkpoints
     legacy_glob = [p for p in Path("checkpoints").glob("mg_cmt_*/checkpoint_best.pth")
                        if len(p.parent.name) == len("mg_cmt_20260125_145550")]
-    new_glob = [p for p in Path("checkpoints").glob("mgm_tb_former_*/checkpoint_best.pth")
-                if len(p.parent.name) == len("mgm_tb_former_20260125_145550")]
+    new_glob = [p for p in Path("checkpoints").glob("mgm_tb_net_dataset1_*/checkpoint_best.pth")
+                if len(p.parent.name) == len("mgm_tb_net_dataset1_20260302_235748")]
     
     checkpoint_glob = legacy_glob + new_glob
     
@@ -257,6 +257,7 @@ if __name__ == "__main__":
     checkpoint_path = sorted(checkpoint_glob)[-1] # Take latest
     print(f"Using checkpoint: {checkpoint_path}")
     
+    config_path = checkpoint_path.parent / "config.yaml"
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
         
