@@ -7,3 +7,4 @@ data/TB_Chest_Radiography_Database
 env
 checkpoints
 results
+.DS_STORE

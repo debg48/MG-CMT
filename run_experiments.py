@@ -45,7 +45,7 @@ EXPERIMENTS = {
         },
         'mgm_tb_net': {
             'model_type': 'mgm_tb_net',
-            'fmca_modulation': 'logit',
+            'fmca_modulation': 'post',
             'description': 'Full MGM-TB-Net (ours)'
         }
     },
@@ -247,10 +247,10 @@ EXPERIMENTS = {
             'use_residual': True  # Matches mgm_tb_net residual for fair comparison
         },
         # Note: fmca_logit_scale removed — identical to mgm_tb_net (both use mgm_tb_net + logit)
-        'fmca_post_scale': {
+        'fmca_logit': {
             'model_type': 'mgm_tb_net',  # mgm_tb_net has residual built-in
-            'fmca_modulation': 'post',
-            'description': 'FMCA with post-softmax scaling'
+            'fmca_modulation': 'logit',
+            'description': 'FMCA with logit-scale scaling'
         }
     },
 
